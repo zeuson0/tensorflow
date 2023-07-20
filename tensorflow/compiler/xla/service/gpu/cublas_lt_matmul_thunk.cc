@@ -15,7 +15,6 @@ limitations under the License.
 
 #include "tensorflow/compiler/xla/service/gpu/cublas_lt_matmul_thunk.h"
 
-#include <memory>
 #include <utility>
 
 #include "tensorflow/compiler/xla/service/gpu/matmul_utils.h"
@@ -29,8 +28,7 @@ namespace xla {
 namespace gpu {
 
 CublasLtMatmulThunk::CublasLtMatmulThunk(
-    ThunkInfo thunk_info, GemmConfig gemm_config,
-    se::cuda::BlasLt::Epilogue epilogue, int64_t algorithm_idx,
+    ThunkInfo thunk_info, cublas_lt::MatmulPlan plan, int64_t algorithm_idx,
     BufferAllocation::Slice a_buffer, BufferAllocation::Slice b_buffer,
     BufferAllocation::Slice c_buffer, BufferAllocation::Slice d_buffer,
     BufferAllocation::Slice bias_buffer, BufferAllocation::Slice aux_buffer,
@@ -38,8 +36,7 @@ CublasLtMatmulThunk::CublasLtMatmulThunk(
     BufferAllocation::Slice c_scale, BufferAllocation::Slice d_scale,
     BufferAllocation::Slice d_amax)
     : Thunk(Kind::kCublasLtMatmul, thunk_info),
-      gemm_config_(std::move(gemm_config)),
-      epilogue_(epilogue),
+      plan_(std::move(plan)),
       algorithm_idx_(algorithm_idx),
       a_buffer_(a_buffer),
       b_buffer_(b_buffer),
@@ -54,12 +51,10 @@ CublasLtMatmulThunk::CublasLtMatmulThunk(
       d_amax_buffer_(d_amax) {}
 
 Status CublasLtMatmulThunk::ExecuteOnStream(const ExecuteParams& params) {
-  TF_ASSIGN_OR_RETURN(cublas_lt::MatmulPlan * plan,
-                      GetMatmulPlan(params.stream));
   if (!algorithm_) {
     TF_ASSIGN_OR_RETURN(
         std::vector<se::cuda::BlasLt::MatmulAlgorithm> algorithms,
-        plan->GetAlgorithms(params.stream));
+        plan_.GetAlgorithms(params.stream));
     TF_RET_CHECK(algorithm_idx_ >= 0 && algorithm_idx_ < algorithms.size());
     algorithm_ = algorithms[algorithm_idx_];
   }
@@ -94,26 +89,11 @@ Status CublasLtMatmulThunk::ExecuteOnStream(const ExecuteParams& params) {
 
   se::OwningScratchAllocator<> scratch_allocator(allocs.device_ordinal(),
                                                  allocs.memory_allocator());
-  return plan->ExecuteOnStream(
+  return plan_.ExecuteOnStream(
       params.stream, allocs.GetDeviceAddress(a_buffer_),
       allocs.GetDeviceAddress(b_buffer_), allocs.GetDeviceAddress(c_buffer_),
       allocs.GetDeviceAddress(d_buffer_), bias, aux, a_scale, b_scale, c_scale,
       d_scale, d_amax, *algorithm_, scratch_allocator);
-}
-
-StatusOr<cublas_lt::MatmulPlan*> CublasLtMatmulThunk::GetMatmulPlan(
-    const stream_executor::Stream* stream) {
-  absl::MutexLock lock(&matmul_plans_cache_mutex_);
-  auto it = matmul_plans_cache_.find(stream);
-  if (it == matmul_plans_cache_.end()) {
-    TF_ASSIGN_OR_RETURN(cublas_lt::MatmulPlan plan,
-                        cublas_lt::MatmulPlan::From(gemm_config_, epilogue_));
-    it = matmul_plans_cache_
-             .insert({stream,
-                      std::make_unique<cublas_lt::MatmulPlan>(std::move(plan))})
-             .first;
-  }
-  return it->second.get();
 }
 
 }  // namespace gpu

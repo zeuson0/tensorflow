@@ -61,12 +61,7 @@ class MklLayerNormOp : public OpKernel {
                                   "tensors are not same."));
 
       auto cpu_engine = engine(engine::kind::cpu, 0);
-      // Create the oneDNN wrapper over Eigen threadpool and set max threads
-      // in oneDNN.
-      Eigen::ThreadPoolInterface* eigen_interface =
-          EigenThreadPoolFromTfContext(ctx);
-      tsl::OneDnnThreadPool eigen_tp(eigen_interface,
-                                     ThreadPoolUseCallerThread());
+      MklDnnThreadPool eigen_tp(ctx);
       auto cpu_stream =
           std::unique_ptr<stream>(CreateStream(&eigen_tp, cpu_engine));
 

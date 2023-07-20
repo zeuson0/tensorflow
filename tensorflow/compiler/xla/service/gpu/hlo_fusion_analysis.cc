@@ -324,35 +324,7 @@ StatusOr<LaunchDimensions> HloFusionAnalysis::GetLaunchDimensions(
       return LaunchDimensions(tiling_scheme->GetNumberOfBlocksPhysical(),
                               tiling_scheme->GetNumThreadsPerBlockPhysical());
     }
-    case EmitterFusionKind::kInputSlices: {
-      auto* root =
-          fusion_->fused_instructions_computation()->root_instruction();
-      xla::Shape shape;
-      if (root->opcode() == HloOpcode::kSlice) {
-        shape = root->operands()[0]->shape();
-      } else {
-        CHECK_EQ(root->opcode(), HloOpcode::kTuple);
-        // We already verified that the shapes are compatible in
-        // `GetEmitterFusionKind`.
-        shape = root->operands()[0]->operands()[0]->shape();
-      }
-      constexpr int kUnrollFactor = 1;
-      return CalculateLaunchDimensions(
-          shape, *device_info_, use_experimental_block_size, {kUnrollFactor});
-    }
-    case EmitterFusionKind::kScatter: {
-      const auto& root_shape = fusion_->fused_instructions_computation()
-                                   ->root_instruction()
-                                   ->shape();
-      int64_t num_elements = ShapeUtil::ElementsIn(root_shape);
-      int unroll_factor = num_elements % 4 == 0   ? 4
-                          : num_elements % 2 == 0 ? 2
-                                                  : 1;
-      return CalculateLaunchDimensions(root_shape, *device_info_,
-                                       use_experimental_block_size,
-                                       {unroll_factor, /*few_waves=*/false});
-    }
-    case EmitterFusionKind::kTriton:
+    default:
       return Unimplemented("GetLaunchDimensions");
   }
 }
@@ -362,11 +334,15 @@ const ReductionCodegenInfo* HloFusionAnalysis::GetReductionCodegenInfo() {
     return &reduction_codegen_info_.value();
   }
 
-  HloInstruction* hero_reduction =
-      FindHeroReduction(absl::Span<HloInstruction*>(fusion_roots_));
-  CHECK_NE(hero_reduction, nullptr);
+  HloInstruction* first_reduce =
+      *absl::c_find_if(fusion_roots_, [](HloInstruction* instr) {
+        return IsReductionFromOrToContiguousDimensions(*instr);
+      });
 
-  auto reduction_codegen_info = ComputeReductionCodegenInfo(hero_reduction);
+  // We always use the first reduce as representative to construct
+  // ReductionCodegenInfo, since all the reductions are required to have the
+  // same shape and layout as verified by `IsFusedReductionOutputConsistent()`.
+  auto reduction_codegen_info = ComputeReductionCodegenInfo(first_reduce);
   reduction_codegen_info_.emplace(std::move(reduction_codegen_info));
   return &reduction_codegen_info_.value();
 }
@@ -425,12 +401,6 @@ const LaunchDimensionsConfig* HloFusionAnalysis::GetLoopFusionConfig() {
     unroll_factor = ComputeMaxUnrollFactor(num_elements);
   }
   VLOG(2) << "Unroll factor: " << unroll_factor;
-
-  if (GetEmitterFusionKind() == EmitterFusionKind::kScatter) {
-    // Only the unroll factor is used for scatter.
-    loop_fusion_config_.emplace(LaunchDimensionsConfig{unroll_factor});
-    return &loop_fusion_config_.value();
-  }
 
   bool row_vectorized;
   int num_big_inputs;
@@ -692,10 +662,10 @@ int HloFusionAnalysis::CalculateVirtualThreadScalingFactorForReduction(
 }
 
 ReductionCodegenInfo HloFusionAnalysis::ComputeReductionCodegenInfo(
-    HloInstruction* hero_reduction) const {
-  Shape input_shape = hero_reduction->operand(0)->shape();
+    HloInstruction* first_reduce) const {
+  Shape input_shape = first_reduce->operand(0)->shape();
   ReductionDimensions reduction_dimensions =
-      GetReductionKindAndContiguousComponents(*hero_reduction);
+      GetReductionKindAndContiguousComponents(*first_reduce);
   VLOG(10) << "is_row_reduction " << reduction_dimensions.is_row_reduction
            << " " << reduction_dimensions.dimensions[0] << " "
            << reduction_dimensions.dimensions[1] << " "
@@ -713,9 +683,9 @@ ReductionCodegenInfo HloFusionAnalysis::ComputeReductionCodegenInfo(
       // Use 512 as default block size (threads per block) for row reductions.
       // For multi-output fusions, reduce the block size further to decrease
       // register pressure when multiple outputs are computed by each thread.
-      int64_t max_block_size = std::max(
-          MinThreadsXRowReduction(hero_reduction->GetModule()->config()),
-          static_cast<int64_t>(512LL / NearestPowerOfTwo(fan_out)));
+      int64_t max_block_size =
+          std::max(MinThreadsXRowReduction(first_reduce->GetModule()->config()),
+                   static_cast<int64_t>(512LL / NearestPowerOfTwo(fan_out)));
       return std::min(max_block_size,
                       RoundUpTo(CeilOfRatio(reduction_dimensions.dimensions[2],
                                             reduction_tiling[2]),
@@ -732,7 +702,7 @@ ReductionCodegenInfo HloFusionAnalysis::ComputeReductionCodegenInfo(
       ProjectedShmemUsageBytes(reduction_dimensions, instr_index_groups);
   const int64_t shmem_budget = device_info_->shared_memory_per_block;
   bool reduction_is_race_free = ReductionIsRaceFree(
-      hero_reduction->GetModule()->config(), reduction_dimensions);
+      first_reduce->GetModule()->config(), reduction_dimensions);
   bool vectorize =
       // Vectorization might cause us to run out of budget.
       (shmem_usage * 2 <= shmem_budget) &&
@@ -794,7 +764,7 @@ ReductionCodegenInfo HloFusionAnalysis::ComputeReductionCodegenInfo(
                              virtual_thread_scaling_factor);
   return ReductionCodegenInfo(
       tiling_scheme, num_partial_results, reduction_dimensions.is_row_reduction,
-      reduction_is_race_free, std::move(instr_index_groups), hero_reduction);
+      reduction_is_race_free, std::move(instr_index_groups), first_reduce);
 }
 
 }  // namespace gpu

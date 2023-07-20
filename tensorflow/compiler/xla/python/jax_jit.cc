@@ -242,21 +242,18 @@ xla::Status ParseArguments(absl::Span<PyObject* const> positional_args,
                            py::handle kwnames,
                            absl::Span<int const> static_argnums,
                            absl::Span<py::str const> static_argnames,
-                           xla::PyTreeRegistry* pytree_registry,
                            ParsedArgumentsAsBuffers& arguments) {
   tsl::profiler::TraceMe traceme("ParseArguments");
 
   arguments.flat_dynamic_args.reserve(positional_args.size() +
                                       keyword_args.size());
   if (static_argnums.empty()) {
-    arguments.signature.dynamic_arg_treedefs.reserve(positional_args.size());
+    arguments.signature.dynamic_arg_treedefs.resize(positional_args.size());
 
     // Positional arguments.
     for (int i = 0; i < positional_args.size(); ++i) {
-      arguments.signature.dynamic_arg_treedefs.emplace_back(pytree_registry);
-      xla::PyTreeDef& pytree_def =
-          arguments.signature.dynamic_arg_treedefs.back();
-      pytree_def.Flatten(positional_args[i], arguments.flat_dynamic_args);
+      xla::PyTreeDef& pytree_def = arguments.signature.dynamic_arg_treedefs[i];
+      pytree_def.FlattenInto(positional_args[i], arguments.flat_dynamic_args);
     }
   } else {
     arguments.signature.dynamic_arg_treedefs.reserve(positional_args.size());
@@ -265,10 +262,10 @@ xla::Status ParseArguments(absl::Span<PyObject* const> positional_args,
     for (int i = 0; i < positional_args.size(); ++i) {
       if (std::find(static_argnums.begin(), static_argnums.end(), i) ==
           static_argnums.end()) {
-        arguments.signature.dynamic_arg_treedefs.emplace_back(pytree_registry);
+        arguments.signature.dynamic_arg_treedefs.emplace_back();
         xla::PyTreeDef& pytree_def =
             arguments.signature.dynamic_arg_treedefs.back();
-        pytree_def.Flatten(positional_args[i], arguments.flat_dynamic_args);
+        pytree_def.FlattenInto(positional_args[i], arguments.flat_dynamic_args);
       } else {
         arguments.signature.static_args.emplace_back(
             py::reinterpret_borrow<py::object>(positional_args[i]));
@@ -315,10 +312,10 @@ xla::Status ParseArguments(absl::Span<PyObject* const> positional_args,
       } else {
         arguments.signature.dynamic_arg_names.push_back(
             py::reinterpret_steal<py::object>(kwargs[i].first));
-        arguments.signature.dynamic_arg_treedefs.emplace_back(pytree_registry);
+        arguments.signature.dynamic_arg_treedefs.emplace_back();
         xla::PyTreeDef& pytree_def =
             arguments.signature.dynamic_arg_treedefs.back();
-        pytree_def.Flatten(kwargs[i].second, arguments.flat_dynamic_args);
+        pytree_def.FlattenInto(kwargs[i].second, arguments.flat_dynamic_args);
       }
     }
   }

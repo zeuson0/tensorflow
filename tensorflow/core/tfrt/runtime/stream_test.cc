@@ -23,7 +23,6 @@ limitations under the License.
 #include "tensorflow/core/framework/tensor_testutil.h"
 #include "tensorflow/core/tfrt/saved_model/saved_model_testutil.h"
 #include "tensorflow/tsl/platform/env.h"
-#include "tensorflow/tsl/platform/statusor.h"
 
 namespace tensorflow {
 namespace tfrt_stub {
@@ -53,7 +52,7 @@ TEST(StreamTest, Simple) {
   std::vector<absl::flat_hash_map<std::string, tensorflow::Tensor>> outputs;
 
   {
-    TF_ASSERT_OK_AND_ASSIGN(
+    ASSERT_OK_AND_ASSIGN(
         auto scoped_stream_callback,
         GetGlobalStreamCallbackRegistry().Register(
             "test_model", callback_id, step_id,
@@ -89,7 +88,7 @@ TEST(StreamTest, MultipleWriters) {
   std::vector<absl::flat_hash_map<std::string, std::vector<int32_t>>> outputs;
 
   {
-    TF_ASSERT_OK_AND_ASSIGN(
+    ASSERT_OK_AND_ASSIGN(
         auto scoped_stream_callback,
         GetGlobalStreamCallbackRegistry().Register(
             "test_model", callback_id, step_id,

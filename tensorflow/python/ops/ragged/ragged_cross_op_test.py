@@ -27,6 +27,7 @@ from tensorflow.python.framework import tensor_spec
 from tensorflow.python.framework import test_util
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import gen_ragged_array_ops
+from tensorflow.python.ops import random_ops
 from tensorflow.python.ops import sparse_ops
 from tensorflow.python.ops.ragged import ragged_array_ops
 from tensorflow.python.ops.ragged import ragged_factory_ops
@@ -349,32 +350,29 @@ class RaggedCrossOpTest(test_util.TensorFlowTestCase, parameterized.TestCase):
       dict(
           testcase_name='BadDType',
           inputs=[ragged_const([[1.1], [2.2, 3.3]])],
-          message=r'Unexpected dtype for inputs\[0\]',
-      ),
+          message=r'Unexpected dtype for inputs\[0\]'),
       dict(
           testcase_name='StaticBatchSizeMismatch1',
-          inputs=[ragged_const([[1]]), ragged_const([[2], [3]])],
+          inputs=[ragged_const([[1]]),
+                  ragged_const([[2], [3]])],
           exception=(ValueError, errors.InvalidArgumentError),
-          message='inputs must all have the same batch dimension size',
-      ),
+          message='inputs must all have the same batch dimension size'),
       dict(
           testcase_name='StaticBatchSizeMismatch2',
-          inputs=[ragged_const([[1]]), dense_const([[2], [3]])],
+          inputs=[ragged_const([[1]]),
+                  dense_const([[2], [3]])],
           exception=(ValueError, errors.InvalidArgumentError),
-          message='inputs must all have the same batch dimension size',
-      ),
+          message='inputs must all have the same batch dimension size'),
       dict(
           testcase_name='3DDenseTensor',
           inputs=[dense_const([[[1]]])],
           exception=(ValueError, errors.InvalidArgumentError),
-          message='tf.ragged.cross only supports inputs with rank=2',
-      ),
+          message='tf.ragged.cross only supports inputs with rank=2'),
       dict(
           testcase_name='0DDenseTensor',
           inputs=[dense_const(1)],
           exception=(ValueError, errors.InvalidArgumentError),
-          message='tf.ragged.cross only supports inputs with rank=2',
-      ),
+          message='tf.ragged.cross only supports inputs with rank=2'),
   ])
   def testStaticError(self, inputs, exception=ValueError, message=None):
     with self.assertRaisesRegex(exception, message):
@@ -384,29 +382,25 @@ class RaggedCrossOpTest(test_util.TensorFlowTestCase, parameterized.TestCase):
       dict(
           testcase_name='3DRaggedTensor',
           inputs=[ragged_const([[[1]]], ragged_rank=1)],
-          message='tf.ragged.cross only supports inputs with rank=2',
-      ),
+          message='tf.ragged.cross only supports inputs with rank=2'),
       dict(
           testcase_name='0DDenseTensor',
           inputs=[dense_const(1)],
           signature=[[tensor_spec.TensorSpec(None, dtypes.int32)]],
           exception=(ValueError, errors.InvalidArgumentError),
-          message='tf.ragged.cross only supports inputs with rank=2',
-      ),
+          message='tf.ragged.cross only supports inputs with rank=2'),
       dict(
           testcase_name='1DDenseTensor',
           inputs=[dense_const([1])],
           signature=[[tensor_spec.TensorSpec(None, dtypes.int32)]],
           exception=(ValueError, errors.InvalidArgumentError),
-          message='tf.ragged.cross only supports inputs with rank=2',
-      ),
+          message='tf.ragged.cross only supports inputs with rank=2'),
       dict(
           testcase_name='3DDenseTensor',
           inputs=[dense_const([[[1]]])],
           signature=[[tensor_spec.TensorSpec(None, dtypes.int32)]],
           exception=(ValueError, errors.InvalidArgumentError),
-          message='tf.ragged.cross only supports inputs with rank=2',
-      ),
+          message='tf.ragged.cross only supports inputs with rank=2'),
   ])
   def testRuntimeError(self,
                        inputs,
@@ -464,15 +458,7 @@ class RaggedCrossOpTest(test_util.TensorFlowTestCase, parameterized.TestCase):
           out_values_type=dtypes.string,
           out_row_splits_type=dtypes.int64))
 
-  @parameterized.named_parameters([
-      dict(testcase_name='EmptySplits', ragged_splits=[]),
-      dict(
-          testcase_name='NegativeSplits', ragged_splits=[-216, -114, -58, -54]
-      ),
-      dict(testcase_name='TooLargeValueSplits', ragged_splits=[0, 1, 2, 10]),
-      dict(testcase_name='UnsortedSplits', ragged_splits=[0, 2, 2, 1]),
-  ])
-  def testRaggedCrossInvalidRaggedSplits(self, ragged_splits):
+  def testRaggedCrossInvalidValue(self):
     # Test case in GitHub isseu 59114.
     with self.assertRaisesRegex(
         (ValueError, errors.InvalidArgumentError), 'Invalid RaggedTensor'
@@ -482,8 +468,8 @@ class RaggedCrossOpTest(test_util.TensorFlowTestCase, parameterized.TestCase):
       ragged_values = [
           ragged_values_0,
       ]
-      ragged_row_splits_0_tensor = ragged_const(
-          ragged_splits, dtype=dtypes.int64
+      ragged_row_splits_0_tensor = random_ops.random_uniform(
+          [4], minval=-256, maxval=257, dtype=dtypes.int64
       )
       ragged_row_splits_0 = array_ops.identity(ragged_row_splits_0_tensor)
       ragged_row_splits = [

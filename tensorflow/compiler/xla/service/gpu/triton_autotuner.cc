@@ -19,6 +19,7 @@ limitations under the License.
 #include <array>
 #include <cstdint>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -27,7 +28,6 @@ limitations under the License.
 
 #include "absl/algorithm/container.h"
 #include "absl/container/flat_hash_set.h"
-#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
@@ -38,7 +38,6 @@ limitations under the License.
 #include "tensorflow/compiler/xla/hlo/ir/hlo_instruction.h"
 #include "tensorflow/compiler/xla/hlo/ir/hlo_module.h"
 #include "tensorflow/compiler/xla/hlo/ir/hlo_opcode.h"
-#include "tensorflow/compiler/xla/service/dump.h"
 #include "tensorflow/compiler/xla/service/executable.h"
 #include "tensorflow/compiler/xla/service/float_normalization.h"
 #include "tensorflow/compiler/xla/service/gpu/autotuner_compile_util.h"
@@ -47,6 +46,7 @@ limitations under the License.
 #include "tensorflow/compiler/xla/service/gpu/buffer_comparator.h"
 #include "tensorflow/compiler/xla/service/gpu/gemm_rewriter.h"
 #include "tensorflow/compiler/xla/service/gpu/gemm_rewriter_triton.h"
+#include "tensorflow/compiler/xla/service/gpu/gpu_asm_opts_util.h"
 #include "tensorflow/compiler/xla/service/gpu/gpu_device_info.h"
 #include "tensorflow/compiler/xla/service/gpu/gpu_float_support.h"
 #include "tensorflow/compiler/xla/service/gpu/gpu_fusible.h"
@@ -134,11 +134,6 @@ class TritonAutotunerVisitor : public DfsHloRewriteVisitor {
   // device type. Passing it to avoid recalculating it everywhere it's needed.
   StatusOr<AutotuneResult> AutotuneMatmulNoCache(
       const HloInstruction* instr, const AutotuneCacheKey& cache_key) {
-    if (config_.IsDeviceless()) {
-      return InternalError(
-          "Expect autotune result cache hit for deviceless compilation.");
-    }
-
     const HloComputation& fusion = *instr->called_computations()[0];
     se::StreamExecutor* stream_exec = config_.GetExecutor();
     if (!stream_exec->SynchronizeAllActivity()) {
@@ -260,26 +255,6 @@ class TritonAutotunerVisitor : public DfsHloRewriteVisitor {
     TF_ASSIGN_OR_RETURN(
         AutotuneResult best,
         PickBestResult(results, root->ToString(), root->GetModule()->config()));
-
-    if (debug_opts.xla_gpu_dump_autotuned_triton_fusions()) {
-      TF_ASSIGN_OR_RETURN(
-          std::unique_ptr<HloModule> module,
-          TritonGemmAutotuneExtractor(best.triton(),
-                                      GetGpuDeviceInfo(config_.GetExecutor()),
-                                      fusion.FusionInstruction()));
-      module->set_name(std::string(fusion.FusionInstruction()->name()));
-      // Using the original module for its debug info and name in the first
-      // parameter. It's better to include the name of both the original module
-      // and the extracted module, to avoid name clashes.
-      DumpToFileInDirOrStdout(
-          /*module=*/*instr->GetModule(),
-          /*file_prefix=*/"",
-          /*file_suffix=*/
-          absl::StrCat("triton_fusion_", fusion_id_for_dump_++, ".",
-                       module->name(), ".optimized.txt"),
-          /*contents=*/module->ToString());
-    }
-
     return best;
   }
 
@@ -389,7 +364,6 @@ class TritonAutotunerVisitor : public DfsHloRewriteVisitor {
   AutotuneConfig config_;
   tsl::thread::ThreadPool* thread_pool_;
   std::optional<AutotunerCompileUtil> autotuner_compile_util_;
-  int fusion_id_for_dump_ = 0;
 };
 
 // Search space for exhaustive matmul autotuning.

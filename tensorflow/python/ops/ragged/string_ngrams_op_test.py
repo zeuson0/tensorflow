@@ -19,7 +19,8 @@ from absl.testing import parameterized
 from tensorflow.python.eager import def_function
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
-from tensorflow.python.framework import tensor
+from tensorflow.python.framework import ops
+from tensorflow.python.framework import tensor_spec
 from tensorflow.python.framework import test_util
 from tensorflow.python.ops.ragged import ragged_factory_ops
 from tensorflow.python.ops.ragged import ragged_string_ops
@@ -224,7 +225,7 @@ class StringNgramsTest(test_util.TensorFlowTestCase, parameterized.TestCase):
                         [b"LP|LP|b", b"LP|b|", b"b||RP", b"|RP|RP"]],
                        [[b"LP|LP|b", b"LP|b|", b"b||RP", b"|RP|RP"],
                         [b"LP|LP|e", b"LP|e|f", b"e|f|RP", b"f|RP|RP"]]]
-    self.assertIsInstance(ngram_op, tensor.Tensor)
+    self.assertIsInstance(ngram_op, ops.Tensor)
     self.assertAllEqual(expected_ngrams, result)
 
   def test_dense_input(self):
@@ -238,7 +239,7 @@ class StringNgramsTest(test_util.TensorFlowTestCase, parameterized.TestCase):
         [b"LP|LP|b", b"LP|b|", b"b||RP", b"|RP|RP"],
         [b"LP|LP|e", b"LP|e|f", b"e|f|RP", b"f|RP|RP"],
     ]
-    self.assertIsInstance(ngram_op, tensor.Tensor)
+    self.assertIsInstance(ngram_op, ops.Tensor)
     self.assertAllEqual(expected_ngrams, result)
 
   def test_input_list_input(self):
@@ -334,7 +335,7 @@ class StringNgramsTest(test_util.TensorFlowTestCase, parameterized.TestCase):
   def test_unknown_rank_error(self):
     # Use a tf.function that erases shape information.
     @def_function.function(
-        input_signature=[tensor.TensorSpec(None, dtypes.string)])
+        input_signature=[tensor_spec.TensorSpec(None, dtypes.string)])
     def f(v):
       return ragged_string_ops.ngrams(v, 2)
 

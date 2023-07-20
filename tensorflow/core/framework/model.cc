@@ -2606,17 +2606,14 @@ double Model::ComputeTargetTimeNsec() {
          1.0e3;
 }
 
-double Model::ComputeSnapshotProcessingTimeNsec() const {
-  std::unique_ptr<ModelTiming> model_timing = nullptr;
-  {
-    tf_shared_lock l(mu_);
-    if (snapshot_ == nullptr) {
-      return 0.0;
-    }
-    model_timing = std::make_unique<ModelTiming>(snapshot_);
+double Model::ComputeProcessingTimeNsec() const {
+  const std::shared_ptr<Node> root = output();
+  if (root == nullptr) {
+    return 0.0;
   }
 
-  ModelTimingPriorityQueue priority_queue(*model_timing);
+  ModelTiming model_timing(root);
+  ModelTimingPriorityQueue priority_queue(model_timing);
   StatusOr<std::pair<double, Node*>> critical_root_status =
       priority_queue.PopSlowestStageRoot();
   if (!critical_root_status.ok()) {

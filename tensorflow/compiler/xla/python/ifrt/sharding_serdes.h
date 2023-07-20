@@ -19,7 +19,6 @@ limitations under the License.
 #include <memory>
 
 #include "llvm/Support/ExtensibleRTTI.h"
-#include "tensorflow/compiler/xla/python/ifrt/device.h"
 #include "tensorflow/compiler/xla/python/ifrt/serdes.h"
 #include "tensorflow/compiler/xla/statusor.h"
 
@@ -28,18 +27,15 @@ namespace ifrt {
 
 class Client;
 
-// Options for deserializing shardings. Function referenced by `lookup_device`
-// must remain valid during deserialization.
+// Options for deserializing shardings.
 struct DeserializeShardingOptions
     : llvm::RTTIExtends<DeserializeShardingOptions, DeserializeOptions> {
-  explicit DeserializeShardingOptions(
-      DeviceList::LookupDeviceFunc lookup_device)
-      : lookup_device(lookup_device) {}
+  explicit DeserializeShardingOptions(Client* client) : client(client) {}
 
   static char ID;  // NOLINT
 
-  // Function that converts device ids to devices.
-  DeviceList::LookupDeviceFunc lookup_device;
+  // The client whose devices will be used by deserialized shardings.
+  Client* client;
 };
 
 // Casts `DeserializeOptions` into `DeserializeShardingOptions`.

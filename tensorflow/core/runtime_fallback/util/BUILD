@@ -127,6 +127,7 @@ tf_cuda_library(
     # Only build this library with --config=cuda.
     tags = [
         "manual",
+        "no_oss",
         "requires_cuda",
     ],
     deps = [

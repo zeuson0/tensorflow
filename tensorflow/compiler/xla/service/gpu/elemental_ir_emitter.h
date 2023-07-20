@@ -16,7 +16,9 @@ limitations under the License.
 #ifndef TENSORFLOW_COMPILER_XLA_SERVICE_GPU_ELEMENTAL_IR_EMITTER_H_
 #define TENSORFLOW_COMPILER_XLA_SERVICE_GPU_ELEMENTAL_IR_EMITTER_H_
 
+#include <functional>
 #include <string>
+#include <utility>
 
 #include "absl/types/span.h"
 #include "llvm/IR/IRBuilder.h"
@@ -24,10 +26,11 @@ limitations under the License.
 #include "tensorflow/compiler/xla/hlo/ir/hlo_computation.h"
 #include "tensorflow/compiler/xla/hlo/ir/hlo_instruction.h"
 #include "tensorflow/compiler/xla/service/elemental_ir_emitter.h"
-#include "tensorflow/compiler/xla/service/gpu/ir_emitter_context.h"
 #include "tensorflow/compiler/xla/service/gpu/target_util.h"
 #include "tensorflow/compiler/xla/service/hlo_module_config.h"
+#include "tensorflow/compiler/xla/service/llvm_ir/loop_emitter.h"
 #include "tensorflow/compiler/xla/statusor.h"
+#include "tensorflow/compiler/xla/types.h"
 #include "tensorflow/compiler/xla/xla_data.pb.h"
 
 namespace xla {
@@ -35,9 +38,14 @@ namespace gpu {
 
 class GpuElementalIrEmitter : public ElementalIrEmitter {
  public:
+  // A NestedComputer computes an element of the output of the given computation
+  // given a Span of its input elements.
+  using NestedComputer = std::function<StatusOr<std::vector<llvm::Value*>>(
+      const HloComputation&, absl::Span<llvm::Value* const>)>;
+
   GpuElementalIrEmitter(const HloModuleConfig& hlo_module_config,
-                        IrEmitterContext& ir_emitter_context,
-                        llvm::IRBuilder<>* b);
+                        llvm::Module* module, llvm::IRBuilder<>* b,
+                        NestedComputer compute_nested);
 
  protected:
   llvm_ir::IrArray::Index GetSourceIndexOfBitcast(
@@ -90,7 +98,9 @@ class GpuElementalIrEmitter : public ElementalIrEmitter {
 
   StatusOr<std::vector<llvm::Value*>> EmitThreadLocalCall(
       const HloComputation& callee, absl::Span<llvm::Value* const> parameters,
-      absl::string_view, bool /*is_reducer*/) override;
+      absl::string_view, bool /*is_reducer*/) override {
+    return compute_nested_(callee, parameters);
+  }
 
   llvm::Value* EmitThreadId() override;
 
@@ -127,7 +137,8 @@ class GpuElementalIrEmitter : public ElementalIrEmitter {
       absl::string_view name = "");
 
   const HloModuleConfig& hlo_module_config_;
-  IrEmitterContext& ir_emitter_context_;
+
+  NestedComputer compute_nested_;
 };
 
 }  // namespace gpu

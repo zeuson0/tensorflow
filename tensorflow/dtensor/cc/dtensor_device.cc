@@ -1840,10 +1840,6 @@ void DTensorDevice::ExecuteMultiDeviceOperation(
   for (int i = 0; i < num_output_layouts; i++) {
     const Layout& output_layout = function.output_layouts[i];
     const int num_devices = function.num_local_outputs[i];
-    ASSIGN_OR_RETURN_C_STATUS(
-        const std::vector<int64_t> local_output_shape,
-        GetTensorShapeAsVector(function.local_output_shapes[output_offset]),
-        status);
     std::vector<TensorHandlePtr> layout_outputs;
     for (int j = 0; j < num_devices; j++) {
       const int output_idx = output_offset + j;
@@ -1852,8 +1848,7 @@ void DTensorDevice::ExecuteMultiDeviceOperation(
     output_offset += num_devices;
     ASSIGN_OR_RETURN_C_STATUS(
         auto local_output,
-        CreateTensorWithLayout(std::move(layout_outputs), output_layout,
-                               local_output_shape),
+        CreateTensorWithLayout(std::move(layout_outputs), output_layout),
         status);
     outputs[i] = std::move(local_output);
   }

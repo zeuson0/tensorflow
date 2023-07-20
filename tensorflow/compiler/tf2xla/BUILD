@@ -873,7 +873,6 @@ tf_cc_test(
 tf_cc_test(
     name = "tf2xla_test",
     srcs = ["tf2xla_test.cc"],
-    tags = ["no_cuda_on_cpu_tap"],
     deps = [
         ":tf2xla",
         ":tf2xla_proto_cc",
@@ -924,7 +923,6 @@ tf_cc_test(
         "xla_compiler_test.cc",
         "xla_expression_test.cc",
     ],
-    tags = ["no_cuda_on_cpu_tap"],
     deps = [
         ":common",
         ":layout_util",

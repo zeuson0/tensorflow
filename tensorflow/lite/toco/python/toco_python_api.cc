@@ -15,6 +15,7 @@ limitations under the License.
 #include "tensorflow/lite/toco/python/toco_python_api.h"
 
 #include <fstream>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -31,9 +32,9 @@ limitations under the License.
 #include "tensorflow/compiler/mlir/lite/sparsity/sparsify_model.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_def.pb.h"
+#include "tensorflow/core/platform/logging.h"
 #include "tensorflow/lite/core/api/error_reporter.h"
 #include "tensorflow/lite/core/c/common.h"
-#include "tensorflow/lite/model_builder.h"
 #include "tensorflow/lite/python/interpreter_wrapper/python_error_reporter.h"
 #include "tensorflow/lite/python/interpreter_wrapper/python_utils.h"
 #include "tensorflow/lite/schema/schema_generated.h"
@@ -326,28 +327,28 @@ PyObject* MlirQuantizeModel(PyObject* data, bool disable_per_channel,
   auto tflite_model = std::make_unique<tflite::ModelT>();
   model->GetModel()->UnPackTo(tflite_model.get(), nullptr);
 
-  const tflite::TensorType inference_tensor_type =
+  tflite::TensorType inference_tensor_type =
       FromTocoDataTypeToTflitToTensorType(inference_type);
-  const tflite::TensorType input_type =
+  tflite::TensorType input_type =
       FromTocoDataTypeToTflitToTensorType(input_data_type);
-  const tflite::TensorType output_type =
+  tflite::TensorType output_type =
       FromTocoDataTypeToTflitToTensorType(output_data_type);
 
-  std::string output_model;
-  const absl::string_view input_model_buffer(buf, length);
+  flatbuffers::FlatBufferBuilder builder;
   auto status = mlir::lite::QuantizeModel(
-      input_model_buffer, input_type, output_type, inference_tensor_type,
-      /*operator_names=*/{}, disable_per_channel, fully_quantize, output_model,
-      error_reporter.get(), enable_numeric_verify, enable_whole_model_verify,
+      *tflite_model, input_type, output_type, inference_tensor_type, {},
+      disable_per_channel, fully_quantize, &builder, error_reporter.get(),
+      enable_numeric_verify, enable_whole_model_verify,
       /*legacy_float_scale=*/true, denylisted_ops, denylisted_nodes,
       enable_variable_quantization);
+
   if (status != kTfLiteOk) {
     error_reporter->exception();
     return nullptr;
   }
-
-  return tflite::python_utils::ConvertToPyString(output_model.data(),
-                                                 output_model.size());
+  return tflite::python_utils::ConvertToPyString(
+      reinterpret_cast<const char*>(builder.GetCurrentBufferPointer()),
+      builder.GetSize());
 }
 
 PyObject* MlirSparsifyModel(PyObject* data) {

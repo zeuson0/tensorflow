@@ -41,6 +41,9 @@ limitations under the License.
 #include "tensorflow/compiler/xla/service/gpu/gpu_executable_run_options.h"
 #include "tensorflow/compiler/xla/service/gpu/ir_emission_utils.h"
 #include "tensorflow/compiler/xla/service/hlo_module_config.h"
+#include "tensorflow/compiler/xla/service/platform_util.h"
+#include "tensorflow/compiler/xla/service/shaped_buffer.h"
+#include "tensorflow/compiler/xla/status_macros.h"
 #include "tensorflow/compiler/xla/stream_executor/device_memory.h"
 #include "tensorflow/compiler/xla/stream_executor/gpu/gpu_stream.h"
 #include "tensorflow/compiler/xla/stream_executor/gpu/gpu_timer.h"
@@ -190,7 +193,7 @@ StatusOr<std::unique_ptr<Executable>> AutotunerCompileUtil::CompileNoCache(
       std::move(*new_hlo_module), &stream_executor_,
       Compiler::CompileOptions{&allocator_, /*thread_pool=*/nullptr,
                                /*layout_canonicalization_callback=*/{},
-                               /*is_autotuning_compilation=*/true});
+                               /*enable_debug_info_manager=*/false});
   if (out.status().code() == absl::StatusCode::kResourceExhausted) {
     // Being out of shared memory budget is an expected failure.
     return std::unique_ptr<Executable>();

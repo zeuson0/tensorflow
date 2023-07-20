@@ -20,7 +20,6 @@ limitations under the License.
 #include <string>
 #include <utility>
 
-#include "absl/status/status.h"
 #include "tensorflow/compiler/xla/status.h"
 
 namespace xla {
@@ -30,9 +29,7 @@ namespace xla {
 class XlaRuntimeError : public std::runtime_error {
  public:
   explicit XlaRuntimeError(Status status)
-      : std::runtime_error(
-            status.ToString(absl::StatusToStringMode::kWithNoExtraData)),
-        status_(std::move(status)) {
+      : std::runtime_error(status.ToString()), status_(std::move(status)) {
     CHECK(!status_->ok());
   }
 

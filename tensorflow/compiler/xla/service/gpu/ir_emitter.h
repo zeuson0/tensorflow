@@ -125,6 +125,13 @@ class IrEmitter : public DfsHloVisitorWithDefault,
       const HloInstruction& hlo,
       const llvm_ir::ElementGenerator& body_emitter) = 0;
 
+  // Emits a call in IR to the given nested computation with the given operands
+  // and output. If no IR function has been previously emitted for the
+  // computation, also emits such a function.
+  Status EmitCallToNestedComputation(const HloComputation& nested_computation,
+                                     absl::Span<llvm::Value* const> operands,
+                                     llvm::Value* output);
+
   // Emits an atomic operation that implements `nested_computation` in the
   // sequentially consistent memory model. `output_address` and `source_address`
   // are the arguments of the nested computation. For example,
@@ -132,6 +139,21 @@ class IrEmitter : public DfsHloVisitorWithDefault,
   Status EmitAtomicOperationForNestedComputation(
       const HloComputation& nested_computation, llvm::Value* output_address,
       llvm::Value* source_address, llvm::Type* element_type);
+
+  GpuElementalIrEmitter::NestedComputer GetNestedComputer() {
+    return [&](const HloComputation& computation,
+               absl::Span<llvm::Value* const> parameter_elements) {
+      return ComputeNestedElement(computation, parameter_elements);
+    };
+  }
+
+  StatusOr<std::vector<llvm::Value*>> ComputeNestedElement(
+      const HloComputation& computation,
+      absl::Span<llvm::Value* const> parameter_elements);
+
+  StatusOr<std::vector<llvm::Value*>> ComputeNestedElementFromAddrs(
+      const HloComputation& computation,
+      absl::Span<llvm::Value* const> parameter_elements_addrs);
 
   IrEmitterContext* ir_emitter_context_;
   llvm::Module* module_;
@@ -194,6 +216,12 @@ class IrEmitter : public DfsHloVisitorWithDefault,
 
   // A convenience method to determine the proper sync scope for an atomic op.
   llvm::SyncScope::ID DetermineSyncScope() const;
+
+  // Map nested computations to emitted IR functions. This serves as a cache so
+  // that IrEmitter does not emit multiple functions for the same
+  // HloComputation.
+  absl::flat_hash_map<const HloComputation*, llvm::Function*>
+      computation_to_ir_function_;
 };
 
 }  // namespace gpu

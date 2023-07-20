@@ -240,8 +240,7 @@ Status SetUpKernelFallbackCompatRequestContext(
     std::function<void(std::function<void()>)>* runner,
     tfrt_stub::CostRecorder* cost_recorder,
     tfrt::ResourceContext* client_graph_resource_context,
-    tensorflow::CancellationManager* cancellation_manager,
-    const tensorflow::tfrt_stub::RuntimeConfig* runtime_config);
+    tensorflow::CancellationManager* cancellation_manager);
 
 }  // namespace tfd
 }  // namespace tensorflow

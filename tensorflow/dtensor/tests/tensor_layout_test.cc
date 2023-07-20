@@ -692,7 +692,7 @@ TEST_F(LayoutTest, GetSingleDeviceMeshSuccess) {
 
 TEST_F(LayoutTest, GetSingleDeviceLayoutInvalidMesh) {
   auto mesh = Mesh::Empty();
-  EXPECT_THAT(Layout::GetLayout(Layout::LayoutType::kSingleDevice, {}, mesh),
+  EXPECT_THAT(Layout::GetSingleDeviceLayout(mesh),
               StatusIs(tsl::error::INVALID_ARGUMENT));
 }
 
@@ -703,62 +703,13 @@ TEST_F(LayoutTest, GetSingleDeviceLayoutSuccess) {
       auto layout,
       Layout::FromString(
           "maximal:true, mesh:/job:localhost/task:1/device:CPU:0"));
-  EXPECT_THAT(Layout::GetLayout(Layout::LayoutType::kSingleDevice, {}, mesh),
-              IsOkAndHolds(layout));
+  EXPECT_THAT(Layout::GetSingleDeviceLayout(mesh), IsOkAndHolds(layout));
 }
 
 TEST(DynamicSizeTest, IsDynamicSize) {
   EXPECT_TRUE(IsDynamicSize(-1));
   EXPECT_TRUE(IsDynamicSize(mlir::ShapedType::kDynamic));
   EXPECT_FALSE(IsDynamicSize(10));
-}
-
-TEST_F(LayoutTest, LayoutType) {
-  TF_ASSERT_OK_AND_ASSIGN(
-      auto maximal,
-      Layout::FromString(
-          "maximal:true, mesh:/job:localhost/task:1/device:CPU:0"));
-  EXPECT_EQ(maximal.type(), Layout::LayoutType::kSingleDevice);
-  TF_ASSERT_OK_AND_ASSIGN(auto ragged,
-                          Layout::FromString("ragged:x, mesh:|x=2|*TPU"));
-  EXPECT_EQ(ragged.type(), Layout::LayoutType::kRagged);
-  TF_ASSERT_OK_AND_ASSIGN(
-      auto static_layout,
-      Layout::FromString("sharding_specs:x, mesh:|x=2|*TPU"));
-  EXPECT_EQ(static_layout.type(), Layout::LayoutType::kStatic);
-}
-
-TEST_F(LayoutTest, RaggedLayoutToFromString) {
-  TF_ASSERT_OK_AND_ASSIGN(Layout layout, BatchLayout().ToRagged());
-  std::string layout_str = layout.ToString();
-  TF_ASSERT_OK_AND_ASSIGN(Layout layout_from_str,
-                          Layout::FromString(layout_str));
-  TF_ASSERT_OK_AND_ASSIGN(LayoutProto layout_from_str_proto,
-                          layout_from_str.ToProto());
-  EXPECT_THAT(layout.ToProto(),
-              IsOkAndHolds(EqualsProto(layout_from_str_proto)));
-}
-
-TEST_F(LayoutTest, RaggedLayoutEqual) {
-  TF_ASSERT_OK_AND_ASSIGN(
-      Layout fully_sharded,
-      Layout::FromString("sharding_specs:x,y, mesh:|x=2,y=1|*TPU"));
-  TF_ASSERT_OK_AND_ASSIGN(
-      Layout x_sharded,
-      Layout::FromString("sharding_specs:x,unsharded, mesh:|x=2,y=1|*TPU"));
-  TF_ASSERT_OK_AND_ASSIGN(
-      Layout x_ragged,
-      Layout::FromString("ragged:x,unsharded, mesh:|x=2,y=1|*TPU"));
-  TF_ASSERT_OK_AND_ASSIGN(Layout x_y_ragged,
-                          Layout::FromString("ragged:x,y, mesh:|x=2,y=1|*TPU"));
-
-  // Test that 'IsEquivalent' and '==' take layout type into account.
-  EXPECT_TRUE(x_ragged.IsEquivalent(x_y_ragged));
-  EXPECT_TRUE(x_y_ragged.IsEquivalent(x_ragged));
-  EXPECT_FALSE(x_sharded.IsEquivalent(x_ragged));
-  EXPECT_FALSE(fully_sharded.IsEquivalent(x_y_ragged));
-  EXPECT_FALSE(x_sharded == x_ragged);
-  EXPECT_FALSE(fully_sharded == x_y_ragged);
 }
 
 }  // namespace

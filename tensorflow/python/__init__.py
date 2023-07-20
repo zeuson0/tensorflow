@@ -46,9 +46,14 @@ from tensorflow.python.profiler import profiler_client
 from tensorflow.python.profiler import profiler_v2
 from tensorflow.python.profiler import trace
 from tensorflow.python.saved_model import saved_model
+from tensorflow.python.summary import summary
 from tensorflow.python.tpu import api
 from tensorflow.python.user_ops import user_ops
 from tensorflow.python.util import compat
+
+# Import the names from python/training.py as train.Name.
+from tensorflow.python.training import training as train
+from tensorflow.python.training import quantize_training as _quantize_training
 
 # Sub-package for performing i/o directly instead of via ops in a graph.
 from tensorflow.python.lib.io import python_io

@@ -90,7 +90,7 @@ cc_library(
         "@stablehlo//:stablehlo_portable_api",
         "@stablehlo//:stablehlo_serialization",
     ],
-    alwayslink = True,
+    alwayslink = 1,
 )
 
 xla_cc_test(
@@ -126,10 +126,11 @@ cc_library(
         ":xla_ifrt",
         ":xla_sharding_proto_cc",
         "//tensorflow/compiler/xla/hlo/ir:hlo",
+        "//tensorflow/compiler/xla/python/ifrt",
         "//tensorflow/compiler/xla/python/ifrt:serdes",
         "//tensorflow/compiler/xla/python/ifrt:sharding_serdes",
     ],
-    alwayslink = True,
+    alwayslink = 1,
 )
 
 xla_cc_test(
@@ -139,9 +140,8 @@ xla_cc_test(
         ":xla_ifrt",
         ":xla_sharding_serdes",
         "//tensorflow/compiler/xla/hlo/ir:hlo",
+        "//tensorflow/compiler/xla/python/ifrt:mock",
         "//tensorflow/compiler/xla/python/ifrt:sharding_serdes",
-        "//tensorflow/compiler/xla/python/ifrt:sharding_test_util",
-        "@com_google_absl//absl/functional:bind_front",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -149,7 +149,7 @@ xla_cc_test(
 # TODO(hyeontaek): Move this target out of pjrt_ifrt.
 cc_library(
     name = "xla_executable_impl_test_lib",
-    testonly = True,
+    testonly = 1,
     srcs = ["xla_executable_impl_test_lib.cc"],
     deps = [
         ":xla_ifrt",
@@ -160,7 +160,7 @@ cc_library(
         "//tensorflow/tsl/platform:statusor",
         "@com_google_absl//absl/strings",
     ],
-    alwayslink = True,
+    alwayslink = 1,
 )
 
 # TODO(hyeontaek): Move this target out of pjrt_ifrt.
@@ -182,8 +182,6 @@ xla_cc_test(
     deps = [
         ":tfrt_cpu_client_test_lib",
         ":xla_ifrt",
-        "//tensorflow/compiler/xla:xla_data_proto_cc",
-        "//tensorflow/compiler/xla/python/ifrt:sharding_test_util",
         "//tensorflow/compiler/xla/python/ifrt:tuple_impl_test_lib",
         "//tensorflow/tsl/platform:errors",
         "//tensorflow/tsl/platform:status_matchers",
@@ -238,14 +236,14 @@ cc_library(
 
 cc_library(
     name = "tfrt_cpu_client_test_lib",
-    testonly = True,
+    testonly = 1,
     srcs = ["tfrt_cpu_client_test_lib.cc"],
     deps = [
         ":pjrt_ifrt",
         "//tensorflow/compiler/xla/pjrt:tfrt_cpu_pjrt_client",
         "//tensorflow/compiler/xla/python/ifrt:test_util",
     ],
-    alwayslink = True,
+    alwayslink = 1,
 )
 
 xla_cc_test(

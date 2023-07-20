@@ -16,6 +16,7 @@ limitations under the License.
 
 #include <utility>
 
+#include "base/vlog_is_on.h"
 #include "mlir/IR/BuiltinOps.h"  // from @llvm-project
 #include "mlir/IR/OwningOpRef.h"  // from @llvm-project
 #include "mlir/Pass/PassManager.h"  // from @llvm-project
@@ -39,7 +40,6 @@ limitations under the License.
 #include "tensorflow/core/tfrt/mlrt/bytecode/bytecode.h"
 #include "tensorflow/core/tfrt/runtime/runtime.h"
 #include "tensorflow/tsl/platform/errors.h"
-#include "tensorflow/tsl/platform/logging.h"
 #include "tensorflow/tsl/platform/status.h"
 
 namespace tensorflow {

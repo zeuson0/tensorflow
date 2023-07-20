@@ -41,7 +41,7 @@ using ::testing::TempDir;
 
 using GpuCompilerTest = HloTestBase;
 
-TEST_F(GpuCompilerTest, GenerateDebugInfoForNonAutotuningCompilations) {
+TEST_F(GpuCompilerTest, DebugInfoManagerEnabled) {
   const char* hlo_text = R"(
 HloModule test
 
@@ -58,13 +58,13 @@ ENTRY main {
                        {/*device_allocator=*/nullptr,
                         /*thread_pool=*/nullptr,
                         /*layout_canonicalization_callback=*/{},
-                        /*is_autotuning_compilation=*/false})
+                        /*enable_debug_info_manager=*/true})
           .value();
   EXPECT_TRUE(XlaDebugInfoManager::Get()->TracksModule(
       executable->module().unique_id()));
 }
 
-TEST_F(GpuCompilerTest, DoesNotGenerateDebugInfoForAutotuningCompilations) {
+TEST_F(GpuCompilerTest, DebugInfoManagerDisabled) {
   const char* hlo_text = R"(
 HloModule test
 
@@ -81,7 +81,7 @@ ENTRY main {
                        {/*device_allocator=*/nullptr,
                         /*thread_pool=*/nullptr,
                         /*layout_canonicalization_callback=*/{},
-                        /*is_autotuning_compilation=*/true})
+                        /*enable_debug_info_manager=*/false})
           .value();
   EXPECT_FALSE(XlaDebugInfoManager::Get()->TracksModule(
       executable->module().unique_id()));
@@ -196,6 +196,7 @@ TEST_F(PersistedAutotuningTest, WriteResultsOnEachCompilation) {
                                                            &results));
   }
 }
+
 
 }  // namespace
 }  // namespace gpu

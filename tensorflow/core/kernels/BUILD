@@ -3586,9 +3586,8 @@ tf_kernel_library(
 tf_kernel_library(
     name = "fft_ops",
     prefix = "fft_ops",
-    deps = MATH_DEPS + if_cuda([
-        "@com_google_absl//absl/container:flat_hash_map",
-        "//tensorflow/core/platform:stream_executor",
+    deps = MATH_DEPS + [
+    ] + if_cuda([
         "//tensorflow/compiler/xla/stream_executor/cuda:cufft_plugin",
     ]),
 )

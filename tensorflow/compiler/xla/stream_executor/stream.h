@@ -466,7 +466,6 @@ class Stream {
       const dnn::MatmulTensorDescriptor &bmm2_rhs_descriptor,
       const dnn::MatmulTensorDescriptor &intermediate_bmm2_lhs_descriptor,
       const dnn::TensorDescriptor &output_descriptor,
-      std::optional<dnn::TensorDescriptor> activation_descriptor,
       std::optional<double> dropout_rate, std::optional<int64_t> seed) {
     dnn::DnnSupport *dnn_support = parent_->AsDnn();
     if (!dnn_support) {
@@ -475,7 +474,7 @@ class Stream {
     return dnn_support->FusedMHASoftmaxRunnerFromDesc(
         this, algorithm_desc, kind, bmm1_lhs_descriptor, bmm1_rhs_descriptor,
         bmm2_rhs_descriptor, intermediate_bmm2_lhs_descriptor,
-        output_descriptor, activation_descriptor, dropout_rate, seed);
+        output_descriptor, dropout_rate, seed);
   }
 
   tsl::StatusOr<std::unique_ptr<const dnn::FusedMHAMaskRunner>>
@@ -486,7 +485,6 @@ class Stream {
       const dnn::MatmulTensorDescriptor &bmm2_rhs_descriptor,
       const dnn::MatmulTensorDescriptor &intermediate_bmm2_lhs_descriptor,
       const dnn::TensorDescriptor &output_descriptor,
-      std::optional<dnn::TensorDescriptor> activation_descriptor,
       const dnn::TensorDescriptor &mask_descriptor, double scale,
       std::optional<double> dropout_rate, std::optional<int64_t> seed) {
     dnn::DnnSupport *dnn_support = parent_->AsDnn();
@@ -496,8 +494,7 @@ class Stream {
     return dnn_support->FusedMHAScaleMaskSoftmaxRunnerFromDesc(
         this, algorithm_desc, kind, bmm1_lhs_descriptor, bmm1_rhs_descriptor,
         bmm2_rhs_descriptor, intermediate_bmm2_lhs_descriptor,
-        output_descriptor, activation_descriptor, mask_descriptor, scale,
-        dropout_rate, seed);
+        output_descriptor, mask_descriptor, scale, dropout_rate, seed);
   }
 
   tsl::StatusOr<std::unique_ptr<const dnn::FusedMHABiasMaskRunner>>
@@ -508,7 +505,6 @@ class Stream {
       const dnn::MatmulTensorDescriptor &bmm2_rhs_descriptor,
       const dnn::MatmulTensorDescriptor &intermediate_bmm2_lhs_descriptor,
       const dnn::TensorDescriptor &output_descriptor,
-      std::optional<dnn::TensorDescriptor> activation_descriptor,
       const dnn::TensorDescriptor &mask_descriptor,
       const dnn::TensorDescriptor &bias_descriptor, double scale,
       std::optional<double> dropout_rate, std::optional<int64_t> seed) {
@@ -519,8 +515,8 @@ class Stream {
     return dnn_support->FusedMHAScaleBiasMaskSoftmaxRunnerFromDesc(
         this, algorithm_desc, kind, bmm1_lhs_descriptor, bmm1_rhs_descriptor,
         bmm2_rhs_descriptor, intermediate_bmm2_lhs_descriptor,
-        output_descriptor, activation_descriptor, mask_descriptor,
-        bias_descriptor, scale, dropout_rate, seed);
+        output_descriptor, mask_descriptor, bias_descriptor, scale,
+        dropout_rate, seed);
   }
 
   tsl::StatusOr<std::unique_ptr<const dnn::FusedMHABiasRunner>>
@@ -531,7 +527,6 @@ class Stream {
       const dnn::MatmulTensorDescriptor &bmm2_rhs_descriptor,
       const dnn::MatmulTensorDescriptor &intermediate_bmm2_lhs_descriptor,
       const dnn::TensorDescriptor &output_descriptor,
-      std::optional<dnn::TensorDescriptor> activation_descriptor,
       const dnn::TensorDescriptor &bias_descriptor, double scale,
       std::optional<double> dropout_rate, std::optional<int64_t> seed) {
     dnn::DnnSupport *dnn_support = parent_->AsDnn();
@@ -541,8 +536,7 @@ class Stream {
     return dnn_support->FusedMHAScaleBiasSoftmaxRunnerFromDesc(
         this, algorithm_desc, kind, bmm1_lhs_descriptor, bmm1_rhs_descriptor,
         bmm2_rhs_descriptor, intermediate_bmm2_lhs_descriptor,
-        output_descriptor, activation_descriptor, bias_descriptor, scale,
-        dropout_rate, seed);
+        output_descriptor, bias_descriptor, scale, dropout_rate, seed);
   }
 
   tsl::StatusOr<std::unique_ptr<const dnn::FusedMHASoftmaxBackwardRunner>>

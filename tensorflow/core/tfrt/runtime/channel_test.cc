@@ -21,7 +21,6 @@ limitations under the License.
 #include <gtest/gtest.h>
 #include "absl/synchronization/blocking_counter.h"
 #include "tensorflow/tsl/platform/env.h"
-#include "tensorflow/tsl/platform/status_matchers.h"
 
 namespace tensorflow {
 namespace tfrt_stub {
@@ -29,7 +28,7 @@ namespace {
 
 using ::testing::ElementsAreArray;
 using ::testing::UnorderedElementsAreArray;
-using ::tsl::testing::StatusIs;
+using ::testing::status::StatusIs;
 
 TEST(ChannelTest, Basic) {
   UnboundedChannel<int> channel;

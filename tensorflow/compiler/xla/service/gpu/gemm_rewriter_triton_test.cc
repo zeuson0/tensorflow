@@ -21,7 +21,6 @@ limitations under the License.
 #include "tensorflow/compiler/xla/hlo/ir/hlo_instruction.h"
 #include "tensorflow/compiler/xla/hlo/ir/hlo_opcode.h"
 #include "tensorflow/compiler/xla/service/gpu/cublas_padding_requirements.h"
-#include "tensorflow/compiler/xla/service/pattern_matcher.h"
 #include "tensorflow/compiler/xla/service/pattern_matcher_gmock.h"
 #include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/stream_executor/device_description.h"
@@ -29,7 +28,6 @@ limitations under the License.
 #include "tensorflow/tsl/lib/core/status_test_util.h"
 #include "tensorflow/tsl/platform/errors.h"
 #include "tensorflow/tsl/platform/status_matchers.h"
-#include "tensorflow/tsl/platform/statusor.h"
 
 namespace xla {
 namespace gpu {
@@ -96,7 +94,7 @@ ENTRY e {
               GmockMatch(m::Fusion(m::Parameter(), m::Parameter())));
 }
 
-TEST_F(GemmRewriterTritonTest, DoNotFuseVectorConstants) {
+TEST_F(GemmRewriterTritonTest, DoNotFuseConstants) {
   TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<VerifiedHloModule> module,
                           ParseAndReturnVerifiedModule(R"(
 HloModule m
@@ -104,8 +102,8 @@ HloModule m
 ENTRY e {
   p0 = s8[60,5] parameter(0)
   c0 = f16[60,5] convert(p0)
-  cst1 = f16[5] constant({...})
-  r1 = f16[5,120] broadcast(cst1), dimensions={0}
+  cst1 = f16[] constant(1234)
+  r1 = f16[5,120] broadcast(cst1)
   ROOT d = f16[60,120] dot(c0, r1),
     lhs_contracting_dims={1}, rhs_contracting_dims={0}
 })"));
@@ -159,8 +157,7 @@ ENTRY e {
                                               ->called_computations()[0];
   const HloInstruction* p0 = dot_computation->parameter_instruction(0);
   const HloInstruction* p1 = dot_computation->parameter_instruction(1);
-  TF_ASSERT_OK_AND_ASSIGN(const auto analysis,
-                          DotFusionAnalysis::Execute(dot_computation));
+  const DotFusionAnalysis analysis(dot_computation);
   EXPECT_EQ(*analysis.ScopeParameters(DotFusionAnalysis::Scope::LHS).begin(),
             p0);
   EXPECT_EQ(*analysis.ScopeParameters(DotFusionAnalysis::Scope::RHS).begin(),
@@ -208,8 +205,7 @@ ENTRY e {
                                               ->called_computations()[0];
   const HloInstruction* p0 = dot_computation->parameter_instruction(0);
   const HloInstruction* p1 = dot_computation->parameter_instruction(1);
-  TF_ASSERT_OK_AND_ASSIGN(const auto analysis,
-                          DotFusionAnalysis::Execute(dot_computation));
+  const DotFusionAnalysis analysis(dot_computation);
   EXPECT_EQ(*analysis.ScopeParameters(DotFusionAnalysis::Scope::LHS).begin(),
             p0);
   EXPECT_EQ(*analysis.ScopeParameters(DotFusionAnalysis::Scope::RHS).begin(),
@@ -254,8 +250,7 @@ ENTRY e {
       module->entry_computation()->root_instruction()->called_computations()[0];
   const HloInstruction* p0 = dot_computation->parameter_instruction(0);
   const HloInstruction* p1 = dot_computation->parameter_instruction(1);
-  TF_ASSERT_OK_AND_ASSIGN(const auto analysis,
-                          DotFusionAnalysis::Execute(dot_computation));
+  const DotFusionAnalysis analysis(dot_computation);
   EXPECT_EQ(*analysis.ScopeParameters(DotFusionAnalysis::Scope::LHS).begin(),
             p1);
   EXPECT_EQ(*analysis.ScopeParameters(DotFusionAnalysis::Scope::RHS).begin(),
@@ -304,8 +299,7 @@ ENTRY e {
                                               ->called_computations()[0];
   const HloInstruction* p0 = dot_computation->parameter_instruction(0);
   const HloInstruction* p1 = dot_computation->parameter_instruction(1);
-  TF_ASSERT_OK_AND_ASSIGN(const auto analysis,
-                          DotFusionAnalysis::Execute(dot_computation));
+  const DotFusionAnalysis analysis(dot_computation);
   EXPECT_EQ(*analysis.ScopeParameters(DotFusionAnalysis::Scope::LHS).begin(),
             p0);
   EXPECT_EQ(*analysis.ScopeParameters(DotFusionAnalysis::Scope::RHS).begin(),
@@ -355,8 +349,7 @@ ENTRY e {
                                               ->called_computations()[0];
   const HloInstruction* p0 = dot_computation->parameter_instruction(0);
   const HloInstruction* p1 = dot_computation->parameter_instruction(1);
-  TF_ASSERT_OK_AND_ASSIGN(const auto analysis,
-                          DotFusionAnalysis::Execute(dot_computation));
+  const DotFusionAnalysis analysis(dot_computation);
   EXPECT_EQ(*analysis.ScopeParameters(DotFusionAnalysis::Scope::LHS).begin(),
             p0);
   EXPECT_EQ(*analysis.ScopeParameters(DotFusionAnalysis::Scope::RHS).begin(),
@@ -403,8 +396,7 @@ ENTRY e {
                                               ->called_computations()[0];
   const HloInstruction* p0 = dot_computation->parameter_instruction(0);
   const HloInstruction* p1 = dot_computation->parameter_instruction(1);
-  TF_ASSERT_OK_AND_ASSIGN(const auto analysis,
-                          DotFusionAnalysis::Execute(dot_computation));
+  const DotFusionAnalysis analysis(dot_computation);
   EXPECT_EQ(*analysis.ScopeParameters(DotFusionAnalysis::Scope::LHS).begin(),
             p0);
   EXPECT_EQ(*analysis.ScopeParameters(DotFusionAnalysis::Scope::RHS).begin(),
@@ -449,61 +441,13 @@ ENTRY e {
   const HloComputation* dot_computation =
       module->entry_computation()->root_instruction()->called_computations()[0];
   const HloInstruction* dot_output = dot_computation->root_instruction();
-  TF_ASSERT_OK_AND_ASSIGN(const auto analysis,
-                          DotFusionAnalysis::Execute(dot_computation));
+  const DotFusionAnalysis analysis(dot_computation);
   EXPECT_THAT(
       *analysis.IterSpec(DotFusionAnalysis::Scope::OUTPUT, dot_output, 0),
       ElementsAre(FieldsAre(/*stride=*/1, /*count=*/24,
                             /*subfragments=*/ElementsAre(2, 12))));
   EXPECT_THAT(
       *analysis.IterSpec(DotFusionAnalysis::Scope::OUTPUT, dot_output, 1),
-      ElementsAre(FieldsAre(/*stride=*/24, /*count=*/3,
-                            /*subfragments=*/ElementsAre(3))));
-}
-
-TEST_F(TritonDotAnalysisTest, OutputParameterIsHandled) {
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<VerifiedHloModule> module,
-                          ParseAndReturnVerifiedModule(R"(
-HloModule t
-
-triton_dot {
-  p0 = bf16[24,4]{1,0} parameter(0)
-  p1 = bf16[4,3]{1,0} parameter(1)
-  dot = bf16[24,3]{1,0} dot(p0, p1),
-    lhs_contracting_dims={1}, rhs_contracting_dims={0}
-  p2 = f16[3,24]{1,0} parameter(2)
-  p2t = f16[24,3]{1,0} transpose(p2), dimensions={1,0}
-  p2tc = bf16[24,3]{1,0} convert(p2t)
-  ROOT r = bf16[24,3]{1,0} divide(p2tc, dot)
-}
-
-ENTRY e {
-  p0 = bf16[24,4]{1,0} parameter(0)
-  p1 = bf16[4,3]{1,0} parameter(1)
-  p2 = f16[3,24]{1,0} parameter(2)
-  ROOT r = bf16[24,3]{1,0} fusion(p0, p1, p2), kind=kCustom,
-    calls=triton_dot
-})"));
-  const HloComputation* dot_computation =
-      module->entry_computation()->root_instruction()->called_computations()[0];
-  const HloInstruction* output_param =
-      dot_computation->parameter_instruction(2);
-  TF_ASSERT_OK_AND_ASSIGN(const auto analysis,
-                          DotFusionAnalysis::Execute(dot_computation));
-  EXPECT_EQ(
-      analysis.IterSpec(DotFusionAnalysis::Scope::OUTPUT, output_param, 0)
-          ->size(),
-      1);
-  EXPECT_THAT(
-      *analysis.IterSpec(DotFusionAnalysis::Scope::OUTPUT, output_param, 0),
-      ElementsAre(FieldsAre(/*stride=*/1, /*count=*/24,
-                            /*subfragments=*/ElementsAre(24))));
-  EXPECT_EQ(
-      analysis.IterSpec(DotFusionAnalysis::Scope::OUTPUT, output_param, 1)
-          ->size(),
-      1);
-  EXPECT_THAT(
-      *analysis.IterSpec(DotFusionAnalysis::Scope::OUTPUT, output_param, 1),
       ElementsAre(FieldsAre(/*stride=*/24, /*count=*/3,
                             /*subfragments=*/ElementsAre(3))));
 }
@@ -530,8 +474,7 @@ ENTRY e {
   const HloComputation* dot_computation =
       module->entry_computation()->root_instruction()->called_computations()[0];
   const HloInstruction* scalar = dot_computation->parameter_instruction(1);
-  TF_ASSERT_OK_AND_ASSIGN(const auto analysis,
-                          DotFusionAnalysis::Execute(dot_computation));
+  const DotFusionAnalysis analysis(dot_computation);
   EXPECT_EQ(analysis.IterSpec(DotFusionAnalysis::Scope::RHS, scalar, 0)->size(),
             1);
   EXPECT_THAT(*analysis.IterSpec(DotFusionAnalysis::Scope::RHS, scalar, 0),
@@ -561,8 +504,7 @@ ENTRY e {
   const HloComputation* dot_computation =
       module->entry_computation()->root_instruction()->called_computations()[0];
   const HloInstruction* vector = dot_computation->parameter_instruction(1);
-  TF_ASSERT_OK_AND_ASSIGN(const auto analysis,
-                          DotFusionAnalysis::Execute(dot_computation));
+  const DotFusionAnalysis analysis(dot_computation);
   EXPECT_EQ(analysis.IterSpec(DotFusionAnalysis::Scope::RHS, vector, 0)->size(),
             1);
   EXPECT_THAT(*analysis.IterSpec(DotFusionAnalysis::Scope::RHS, vector, 0),
@@ -987,9 +929,7 @@ ENTRY e {
                                               ->operand(0)
                                               ->called_computations()[0];
   const HloInstruction* p0 = dot_computation->parameter_instruction(0);
-  TF_ASSERT_OK_AND_ASSIGN(
-      const auto analysis,
-      DotFusionAnalysis::Execute(dot_computation, key.split_k()));
+  DotFusionAnalysis analysis(dot_computation, key.split_k());
   EXPECT_EQ(dot_computation->root_instruction()->shape(),
             ShapeUtil::MakeShapeWithDescendingLayout(F16, {8, 7, 5}));
   EXPECT_THAT(*analysis.IterSpec(DotFusionAnalysis::Scope::LHS, p0, 0),
@@ -1200,60 +1140,6 @@ ENTRY e {
             HloInstruction::FusionKind::kCustom);
   EXPECT_LE(module->entry_computation()->root_instruction()->operand_count(),
             DotFusionAnalysis::kMaxParameterPerScope * 2);
-}
-
-TEST_F(GemmRewriterTritonLevel2Test, ParameterUsedElementwiseTwiceIsFused) {
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<VerifiedHloModule> module,
-                          ParseAndReturnVerifiedModule(R"(
-HloModule t
-
-ENTRY e {
-  p0 = f32[1,35] parameter(0)
-  p0n = f32[1,35] negate(p0)
-  p0e = f32[1,35] exponential(p0)
-  a = f32[1,35] add(p0e, p0n)
-  p1 = f16[35,1] parameter(1)
-  p1c = f32[35,1] convert(p1)
-  ROOT dot = f32[1,1] dot(a, p1c),
-    lhs_contracting_dims={1}, rhs_contracting_dims={0}
-})"));
-  EXPECT_TRUE(GemmRewriterTriton(se::CudaComputeCapability{
-                                     se::CudaComputeCapability::VOLTA, 0})
-                  .Run(module.get())
-                  .value());
-  EXPECT_THAT(module->entry_computation()->root_instruction(),
-              GmockMatch((m::Fusion(m::Parameter(), m::Parameter()))));
-  TF_ASSERT_OK_AND_ASSIGN(
-      const auto analysis,
-      DotFusionAnalysis::Execute(module->entry_computation()
-                                     ->root_instruction()
-                                     ->called_computations()[0]));
-  EXPECT_EQ(analysis.ScopeParameters(DotFusionAnalysis::Scope::LHS).size(), 1);
-  EXPECT_EQ(analysis.ScopeParameters(DotFusionAnalysis::Scope::RHS).size(), 1);
-}
-
-TEST_F(GemmRewriterTritonLevel2Test,
-       ParameterUsedNonElementwiseTwiceIsFusedOnlyOnOnePath) {
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<VerifiedHloModule> module,
-                          ParseAndReturnVerifiedModule(R"(
-HloModule t
-
-ENTRY e {
-  p0 = f32[4,4] parameter(0)
-  p0t = f32[4,4] transpose(p0), dimensions={1,0}
-  a = f32[4,4] add(p0, p0t)
-  p1 = f16[4,5] parameter(1)
-  p1c = f32[4,5] convert(p1)
-  ROOT dot = f32[4,5] dot(a, p1c),
-    lhs_contracting_dims={1}, rhs_contracting_dims={0}
-})"));
-  EXPECT_TRUE(GemmRewriterTriton(se::CudaComputeCapability{
-                                     se::CudaComputeCapability::VOLTA, 0})
-                  .Run(module.get())
-                  .value());
-  EXPECT_THAT(
-      module->entry_computation()->root_instruction(),
-      GmockMatch((m::Fusion(m::Parameter(), m::Transpose(), m::Parameter()))));
 }
 
 }  // namespace

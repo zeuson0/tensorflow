@@ -16,7 +16,6 @@
 
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops
-from tensorflow.python.framework import tensor
 from tensorflow.python.framework import tensor_shape
 from tensorflow.python.framework import tensor_util
 from tensorflow.python.ops import array_ops
@@ -98,9 +97,9 @@ def segment_ids_to_row_splits(segment_ids, num_segments=None,
   # Local import bincount_ops to avoid import-cycle.
   from tensorflow.python.ops import bincount_ops  # pylint: disable=g-import-not-at-top
   if out_type is None:
-    if isinstance(segment_ids, tensor.Tensor):
+    if isinstance(segment_ids, ops.Tensor):
       out_type = segment_ids.dtype
-    elif isinstance(num_segments, tensor.Tensor):
+    elif isinstance(num_segments, ops.Tensor):
       out_type = num_segments.dtype
     else:
       out_type = dtypes.int64

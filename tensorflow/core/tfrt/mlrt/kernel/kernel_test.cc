@@ -38,8 +38,6 @@ limitations under the License.
 #include "tensorflow/core/tfrt/mlrt/interpreter/interpreter_testutil.h"
 #include "tensorflow/core/tfrt/mlrt/kernel/batch_kernel.h"
 #include "tensorflow/core/tfrt/mlrt/kernel/context.h"
-#include "tensorflow/tsl/lib/core/status_test_util.h"
-#include "tensorflow/tsl/platform/status_matchers.h"
 #include "tfrt/concurrency/ref_count.h"  // from @tf_runtime
 #include "tfrt/host_context/concurrent_work_queue.h"  // from @tf_runtime
 #include "tfrt/host_context/execution_context.h"  // from @tf_runtime
@@ -167,7 +165,7 @@ TEST(KernelTest, CreateExecuteOp) {
                          absl::MakeSpan(&arg, 1), absl::MakeSpan(&result, 1));
   mlrt::Execute(execution_context);
 
-  TF_ASSERT_OK(execution_context.status());
+  ASSERT_OK(execution_context.status());
 
   int32_t output = 200;
   tensorflow::Tensor expected(output);
@@ -326,7 +324,7 @@ TEST(KernelTest, CreateExecuteDeviceOp) {
                          absl::MakeSpan(&arg, 1), absl::MakeSpan(results));
   mlrt::Execute(execution_context);
 
-  TF_ASSERT_OK(execution_context.status());
+  ASSERT_OK(execution_context.status());
 
   EXPECT_EQ(
       results[0].Get<tfrt_stub::FallbackTensor>().tensor().scalar<tstring>()(),
@@ -396,9 +394,9 @@ TEST(KernelTest, CreateExecuteOpError) {
                          absl::MakeSpan(&arg, 1), absl::MakeSpan(&result, 1));
   mlrt::Execute(execution_context);
 
-  EXPECT_THAT(
-      execution_context.status(),
-      ::tsl::testing::StatusIs(absl::StatusCode::kInternal, "test error"));
+  EXPECT_THAT(execution_context.status(),
+              ::testing::status::CanonicalStatusIs(absl::StatusCode::kInternal,
+                                                   "test error"));
 }
 
 REGISTER_OP("TestAsyncIdentity")
@@ -570,7 +568,7 @@ TEST(KernelTest, CreateAsyncExecuteOp) {
   mlrt::Execute(execution_context);
 
   notification.WaitForNotification();
-  TF_ASSERT_OK(execution_context.status());
+  ASSERT_OK(execution_context.status());
 
   int32_t output = 100;
   tensorflow::Tensor expected(output);
@@ -637,8 +635,8 @@ TEST(KernelTest, AsyncExecuteOpCanCancell) {
 
   notification.WaitForNotification();
 
-  EXPECT_THAT(execution_context.status(),
-              ::tsl::testing::StatusIs(absl::StatusCode::kCancelled));
+  EXPECT_THAT(execution_context.status(), ::testing::status::CanonicalStatusIs(
+                                              absl::StatusCode::kCancelled));
 }
 
 mlrt::bc::Buffer CreateExecutableForSetGetResourceOp() {
@@ -739,7 +737,7 @@ TEST(KernelTest, SetGetResource) {
   execution_context.Call(executable.functions()[0], last_uses,
                          absl::MakeSpan(&arg, 1), absl::MakeSpan(&result, 1));
   mlrt::Execute(execution_context);
-  TF_ASSERT_OK(execution_context.status());
+  ASSERT_OK(execution_context.status());
 
   int32_t output = 100;
   tensorflow::Tensor expected(output);
@@ -811,7 +809,7 @@ TEST(KernelTest, Predicate) {
     execution_context.Call(loaded_executable.GetFunction("main"), last_uses,
                            absl::MakeSpan(&arg, 1), absl::MakeSpan(&result, 1));
     mlrt::Execute(execution_context);
-    TF_ASSERT_OK(execution_context.status());
+    ASSERT_OK(execution_context.status());
 
     ASSERT_TRUE(result.HasValue());
     EXPECT_TRUE(result.Get<bool>());
@@ -825,10 +823,10 @@ TEST(KernelTest, Predicate) {
   execution_context.Call(loaded_executable.GetFunction("main"), last_uses,
                          absl::MakeSpan(&arg, 1), absl::MakeSpan(&result, 1));
   mlrt::Execute(execution_context);
-  EXPECT_THAT(
-      execution_context.status(),
-      ::tsl::testing::StatusIs(absl::StatusCode::kInvalidArgument,
-                               "variant cannot be converted to a boolean"));
+  EXPECT_THAT(execution_context.status(),
+              ::testing::status::CanonicalStatusIs(
+                  absl::StatusCode::kInvalidArgument,
+                  "variant cannot be converted to a boolean"));
 }
 
 mlrt::bc::Buffer CreateExecutableForPromiseAwaitOps() {
@@ -1045,7 +1043,7 @@ TEST(KernelTest, PromiseAwait) {
 
   notification.WaitForNotification();
 
-  TF_ASSERT_OK(execution_context.status());
+  ASSERT_OK(execution_context.status());
 
   tensorflow::test::ExpectEqual(
       result.Get<tfrt_stub::FallbackTensor>().tensor(),
@@ -1202,7 +1200,7 @@ TEST(KernelTest, PromiseFutureOp) {
   mlrt::Execute(execution_context);
 
   notification.WaitForNotification();
-  TF_ASSERT_OK(execution_context.status());
+  ASSERT_OK(execution_context.status());
 
   int32_t output = 100;
   tensorflow::Tensor expected(output);
@@ -1453,7 +1451,7 @@ TEST(KernelTest, BatchFunctionOp) {
 
   notification.WaitForNotification();
 
-  TF_ASSERT_OK(execution_context.status());
+  ASSERT_OK(execution_context.status());
 
   tensorflow::Tensor expected(tensorflow::DT_INT32, {1});
   expected.flat<int32_t>()(0) = 200;
@@ -1564,8 +1562,8 @@ TEST(KernelTest, CancelCanEarlyReturn) {
 
   notification.WaitForNotification();
 
-  EXPECT_THAT(execution_context.status(),
-              ::tsl::testing::StatusIs(absl::StatusCode::kCancelled));
+  EXPECT_THAT(execution_context.status(), ::testing::status::CanonicalStatusIs(
+                                              absl::StatusCode::kCancelled));
   EXPECT_EQ(result.HasValue(), false);
 }
 
@@ -1622,7 +1620,7 @@ TEST(KernelTest, NoCancel) {
 
   notification.WaitForNotification();
 
-  TF_ASSERT_OK(execution_context.status());
+  ASSERT_OK(execution_context.status());
 
   ASSERT_TRUE(result.HasValue());
   EXPECT_TRUE(result.Get<bool>());
@@ -1773,13 +1771,13 @@ TEST(KernelTest, CancelInAsyncCanEarlyReturn) {
 
   notification.WaitForNotification();
 
-  EXPECT_THAT(execution_context.status(),
-              ::tsl::testing::StatusIs(absl::StatusCode::kCancelled));
+  EXPECT_THAT(execution_context.status(), ::testing::status::CanonicalStatusIs(
+                                              absl::StatusCode::kCancelled));
 
   ASSERT_TRUE(future.IsError());
 
-  EXPECT_THAT(future.GetError(),
-              ::tsl::testing::StatusIs(absl::StatusCode::kCancelled));
+  EXPECT_THAT(future.GetError(), ::testing::status::CanonicalStatusIs(
+                                     absl::StatusCode::kCancelled));
 }
 
 mlrt::bc::Buffer CreateExecutableForTensorToInt32Op() {
@@ -1838,7 +1836,7 @@ TEST(KernelTest, TensorToInt32) {
     execution_context.Call(loaded_executable.GetFunction("main"), last_uses,
                            absl::MakeSpan(&arg, 1), absl::MakeSpan(&result, 1));
     mlrt::Execute(execution_context);
-    TF_ASSERT_OK(execution_context.status());
+    ASSERT_OK(execution_context.status());
 
     ASSERT_TRUE(result.HasValue());
     EXPECT_EQ(result.Get<int32_t>(), 100);
@@ -1852,10 +1850,10 @@ TEST(KernelTest, TensorToInt32) {
     execution_context.Call(loaded_executable.GetFunction("main"), last_uses,
                            absl::MakeSpan(&arg, 1), absl::MakeSpan(&result, 1));
     mlrt::Execute(execution_context);
-    EXPECT_THAT(
-        execution_context.status(),
-        ::tsl::testing::StatusIs(absl::StatusCode::kInvalidArgument,
-                                 "variant cannot be converted to a int32"));
+    EXPECT_THAT(execution_context.status(),
+                ::testing::status::CanonicalStatusIs(
+                    absl::StatusCode::kInvalidArgument,
+                    "variant cannot be converted to a int32"));
   }
 }
 
@@ -2084,7 +2082,7 @@ TEST(KernelTest, MapFnOp) {
 
   notification.WaitForNotification();
 
-  TF_ASSERT_OK(execution_context.status());
+  ASSERT_OK(execution_context.status());
 
   tensorflow::Tensor expected(tensorflow::DT_INT32, {kMapFnOpMaxIteration});
   expected.flat<int32_t>()(0) = 100;
@@ -2160,7 +2158,7 @@ TEST(KernelTest, MapFnOpZeroIteration) {
 
   notification.WaitForNotification();
 
-  TF_ASSERT_OK(execution_context.status());
+  ASSERT_OK(execution_context.status());
 
   tensorflow::Tensor expected(tensorflow::DT_INT32, {});
   expected.scalar<int32_t>()() = 1000;
@@ -2239,9 +2237,10 @@ TEST(KernelTest, MapFnOpError) {
 
   notification.WaitForNotification();
 
-  EXPECT_THAT(execution_context.status(),
-              ::tsl::testing::StatusIs(absl::StatusCode::kInternal,
-                                       "Test Error. First Error Index=0 of 1"));
+  EXPECT_THAT(
+      execution_context.status(),
+      ::testing::status::CanonicalStatusIs(
+          absl::StatusCode::kInternal, "Test Error. First Error Index=0 of 1"));
 }
 
 TEST(KernelTest, MapFnOpErrorWithPromiseSet) {
@@ -2314,9 +2313,9 @@ TEST(KernelTest, MapFnOpErrorWithPromiseSet) {
 
   notification.WaitForNotification();
 
-  EXPECT_THAT(
-      execution_context.status(),
-      ::tsl::testing::StatusIs(absl::StatusCode::kInternal, "Test Error"));
+  EXPECT_THAT(execution_context.status(),
+              ::testing::status::CanonicalStatusIs(absl::StatusCode::kInternal,
+                                                   "Test Error"));
 }
 
 mlrt::bc::Buffer CreatePromiseReturnExecutable() {

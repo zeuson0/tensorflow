@@ -5,10 +5,6 @@ tf_module {
     mtype: "<type \'type\'>"
   }
   member {
-    name: "DeviceOrderMode"
-    mtype: "<class \'enum.EnumMeta\'>"
-  }
-  member {
     name: "HardwareFeature"
     mtype: "<type \'type\'>"
   }

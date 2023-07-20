@@ -349,9 +349,6 @@ class Mesh(_pywrap_dtensor_device.Mesh):
     return mapping
 
 
-LayoutType = _pywrap_dtensor_device.LayoutType
-
-
 # TODO(hthu): Consider making this class immutable.
 @tf_export('experimental.dtensor.Layout', v1=[])
 class Layout(_pywrap_dtensor_device.Layout):
@@ -434,9 +431,7 @@ class Layout(_pywrap_dtensor_device.Layout):
              'valid mesh dimension or UNSHARDED.').format(
                  dim_sharding=dim_sharding))
 
-    super().__init__(
-        type=LayoutType.STATIC, sharding_specs=sharding_specs, mesh=mesh
-    )
+    super().__init__(sharding_specs=sharding_specs, mesh=mesh)
 
   @classmethod
   def _new_object(cls, *args, **kwargs):
@@ -496,10 +491,6 @@ class Layout(_pywrap_dtensor_device.Layout):
   def from_string(cls, layout_str: str) -> 'Layout':
     """Creates an instance from a human-readable string."""
     return cls._new_object(layout_str=layout_str)
-
-  def to_ragged(self) -> 'Layout':
-    """Returns a layout ragged layout from a static layout."""
-    return Layout._new_object(layout=super().to_ragged())
 
   @classmethod
   def inner_sharded(cls, mesh: Mesh, inner_dim: str, rank: int) -> 'Layout':

@@ -20,7 +20,6 @@ limitations under the License.
 
 #include "mlir/IR/Location.h"  // from @llvm-project
 #include "mlir/IR/Operation.h"  // from @llvm-project
-#include "tensorflow/compiler/xla/translate/mhlo_to_hlo/stack_frame_index_builder.h"
 #include "tensorflow/compiler/xla/xla_data.pb.h"
 
 namespace mlir {
@@ -31,12 +30,11 @@ namespace mhlo {
 // location (converted). FileLineColLoc locations are populated by taking the
 // file name and line number, and populating `source_file` and `source_line`
 // respectively.
-xla::OpMetadata CreateOpMetadataFromLocation(
-    Operation* op, StackFrameIndexBuilder* frame_index_builder);
+xla::OpMetadata CreateOpMetadataFromLocation(mlir::Operation* op);
 
 // Returns a name that can be used for debugging purposes, e.g., naming
 // variable names in generated IR or producing logging output.
-std::string GetDebugNameFromLocation(Location location);
+std::string GetDebugNameFromLocation(mlir::Location location);
 
 }  // namespace mhlo
 }  // namespace mlir

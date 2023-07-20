@@ -15,13 +15,17 @@ limitations under the License.
 
 #include "tensorflow/compiler/xla/service/gpu/elemental_ir_emitter.h"
 
+#include <stddef.h>
+
 #include <string>
 #include <vector>
 
+#include "tensorflow/tsl/platform/logging.h"
 // IWYU pragma: no_include "llvm/IR/Attributes.gen.inc"
 // IWYU pragma: no_include "llvm/IR/Intrinsics.gen.inc"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "llvm/ADT/APInt.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Instructions.h"
@@ -31,15 +35,19 @@ limitations under the License.
 #include "llvm/Support/ModRef.h"
 #include "tensorflow/compiler/xla/hlo/ir/hlo_opcode.h"
 #include "tensorflow/compiler/xla/literal.h"
+#include "tensorflow/compiler/xla/primitive_util.h"
 #include "tensorflow/compiler/xla/service/gpu/backend_configs.pb.h"
-#include "tensorflow/compiler/xla/service/gpu/ir_emitter_context.h"
-#include "tensorflow/compiler/xla/service/gpu/ir_emitter_nested.h"
 #include "tensorflow/compiler/xla/service/gpu/target_util.h"
 #include "tensorflow/compiler/xla/service/llvm_ir/ir_array.h"
+#include "tensorflow/compiler/xla/service/llvm_ir/llvm_loop.h"
 #include "tensorflow/compiler/xla/service/llvm_ir/llvm_util.h"
 #include "tensorflow/compiler/xla/service/llvm_ir/math_ops.h"
+#include "tensorflow/compiler/xla/shape_util.h"
+#include "tensorflow/compiler/xla/status_macros.h"
 #include "tensorflow/compiler/xla/statusor.h"
+#include "tensorflow/compiler/xla/types.h"
 #include "tensorflow/compiler/xla/util.h"
+#include "tensorflow/compiler/xla/window_util.h"
 #include "tensorflow/compiler/xla/xla_data.pb.h"
 
 namespace xla {
@@ -63,17 +71,17 @@ bool IsFPLiteralWithValue(const HloInstruction* operand, float value) {
 }  // namespace
 
 GpuElementalIrEmitter::GpuElementalIrEmitter(
-    const HloModuleConfig& hlo_module_config,
-    IrEmitterContext& ir_emitter_context, llvm::IRBuilder<>* b)
-    : ElementalIrEmitter(ir_emitter_context.llvm_module(), b),
+    const HloModuleConfig& hlo_module_config, llvm::Module* module,
+    llvm::IRBuilder<>* b, NestedComputer compute_nested)
+    : ElementalIrEmitter(module, b),
       hlo_module_config_(hlo_module_config),
-      ir_emitter_context_(ir_emitter_context) {}
+      compute_nested_(std::move(compute_nested)) {}
 
 StatusOr<llvm::Value*> GpuElementalIrEmitter::EmitDeviceMathCall(
     TargetDeviceFunctionID funcid, absl::Span<llvm::Value* const> operands,
     absl::Span<const PrimitiveType> input_types, PrimitiveType output_type,
     absl::string_view name) {
-  // Device functions don't have f16 math functions, so we convert the operands
+  // Device functions dont have f16 math functions, so we convert the operands
   // to f32 before calling the function and then convert the result back to f16.
   bool cast_result_to_fp16 = false;
   std::vector<llvm::Value*> converted_operands(operands.begin(),
@@ -333,13 +341,6 @@ llvm::Value* GpuElementalIrEmitter::EmitThreadId() {
       EmitCallToTargetIntrinsic(TargetIntrinsicID::kBlockDimx, {}, {}, b()),
       b()->getIntNTy(128), /*isSigned=*/true, "threads_per_block");
   return NSWAdd(NSWMul(block_id, threads_per_block), thread_id_in_block);
-}
-
-StatusOr<std::vector<llvm::Value*>> GpuElementalIrEmitter::EmitThreadLocalCall(
-    const HloComputation& callee, absl::Span<llvm::Value* const> parameters,
-    absl::string_view, bool /*is_reducer*/) {
-  return CallNestedComputationWithScalars(b(), hlo_module_config_, callee,
-                                          ir_emitter_context_, parameters);
 }
 
 }  // namespace gpu

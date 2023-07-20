@@ -1625,7 +1625,6 @@ py_strict_library(
         ":optional_grad",
         ":random_grad",
         ":rnn_grad",
-        ":sdca_ops",
         ":tensor_array_ops",
         ":unconnected_gradients",
         ":while_loop",
@@ -1635,7 +1634,6 @@ py_strict_library(
         "//tensorflow/python/framework:ops",
         "//tensorflow/python/ops/linalg/sparse:sparse_csr_matrix_grad",
         "//tensorflow/python/ops/signal:fft_ops",
-        "//tensorflow/python/training:checkpoint_ops",
         "//tensorflow/python/util:tf_export",
     ],
 )
@@ -2927,8 +2925,6 @@ py_strict_library(
         ":summary_op_util",
         ":summary_ops_gen",
         "//tensorflow/core:protos_all_py",
-        "//tensorflow/dtensor/python:api",
-        "//tensorflow/dtensor/python:layout",
         "//tensorflow/python/eager:context",
         "//tensorflow/python/eager:profiler",
         "//tensorflow/python/framework:constant_op",
@@ -2941,7 +2937,6 @@ py_strict_library(
         "//tensorflow/python/trackable:resource",
         "//tensorflow/python/training:training_util",
         "//tensorflow/python/util:deprecation",
-        "//tensorflow/python/util:lazy_loader",
         "//tensorflow/python/util:tf_decorator",
         "//tensorflow/python/util:tf_export",
     ],
@@ -3164,7 +3159,7 @@ py_strict_library(
 
 cuda_py_strict_test(
     name = "bitwise_ops_test",
-    size = "medium",
+    size = "small",
     srcs = ["bitwise_ops_test.py"],
     main = "bitwise_ops_test.py",
     python_version = "PY3",
@@ -3509,7 +3504,7 @@ cuda_py_strict_test(
 
 cuda_py_strict_test(
     name = "math_grad_test",
-    size = "medium",
+    size = "small",
     srcs = ["math_grad_test.py"],
     main = "math_grad_test.py",
     python_version = "PY3",

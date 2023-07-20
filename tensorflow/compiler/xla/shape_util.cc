@@ -22,6 +22,7 @@ limitations under the License.
 #include <optional>
 #include <ostream>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -37,7 +38,6 @@ limitations under the License.
 #include "tensorflow/compiler/xla/status_macros.h"
 #include "tensorflow/compiler/xla/types.h"
 #include "tensorflow/compiler/xla/util.h"
-#include "tensorflow/tsl/platform/cpu_info.h"
 #include "tensorflow/tsl/platform/threadpool.h"
 
 namespace xla {
@@ -1731,8 +1731,9 @@ ShapeUtil::DecomposeBitcastToTrt(const Shape& input_shape,
     absl::Span<const int64_t> count, absl::Span<const int64_t> incr,
     const ForEachParallelVisitorFunction& visitor_function) {
   // The parallel version of ForEachIndexInternal can never fail.
-  TF_CHECK_OK(ForEachIndexParallelWithStatus(shape, base, count, incr,
-                                             visitor_function));
+  CHECK(
+      ForEachIndexParallelWithStatus(shape, base, count, incr, visitor_function)
+          .ok());
 }
 
 /* static */ Status ShapeUtil::ForEachIndexParallelWithStatus(
@@ -1747,7 +1748,7 @@ ShapeUtil::DecomposeBitcastToTrt(const Shape& input_shape,
 /* static */ void ShapeUtil::ForEachIndexParallel(
     const Shape& shape,
     const ForEachParallelVisitorFunction& visitor_function) {
-  TF_CHECK_OK(ForEachIndexParallelWithStatus(shape, visitor_function));
+  CHECK(ForEachIndexParallelWithStatus(shape, visitor_function).ok());
 }
 
 /* static */ Status ShapeUtil::ForEachIndexParallelWithStatus(
@@ -2122,4 +2123,5 @@ int64_t ShapeUtil::ForEachState::CalculateNumSteps() const {
   }
   return size;
 }
+
 }  // namespace xla

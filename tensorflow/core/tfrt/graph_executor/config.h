@@ -18,7 +18,6 @@ limitations under the License.
 #include <string>
 
 #include "google/protobuf/any.pb.h"
-#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "tensorflow/core/tfrt/graph_executor/config.pb.h"

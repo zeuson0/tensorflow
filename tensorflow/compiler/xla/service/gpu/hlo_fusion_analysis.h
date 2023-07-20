@@ -76,10 +76,10 @@ class HloFusionAnalysis {
   // Determines the fusion type for the emitter.
   EmitterFusionKind GetEmitterFusionKind() const;
 
-  // Determines the launch dimensions for the fusion. The fusion kind must not
-  // be `kTriton`.
+  // Determines the launch dimensions for the fusion. The fusion kind must be
+  // one of `kLoop`, `kReduction` or `kTranspose`.
   StatusOr<LaunchDimensions> GetLaunchDimensions(
-      bool use_experimental_block_size);
+      bool use_experimental_block_size = false);
 
   // Calculates the reduction information. Returns `nullptr` if the fusion is
   // not a reduction.
@@ -123,7 +123,7 @@ class HloFusionAnalysis {
   int CalculateVirtualThreadScalingFactorForReduction(
       const ReductionDimensions& reduction_dimensions) const;
   ReductionCodegenInfo ComputeReductionCodegenInfo(
-      HloInstruction* hero_reduction) const;
+      HloInstruction* first_reduce) const;
   bool HasConsistentTransposeHeros() const;
 
   const HloFusionInstruction* fusion_;

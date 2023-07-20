@@ -891,10 +891,8 @@ SaveRestoreSPMDExpander::ComputeLayoutForward(
     // Change the mesh of each layout to `mesh` since RestoreOp always runs on
     // the CPU.
     for (int i = 0; i < layouts.size(); ++i) {
-      TF_ASSIGN_OR_RETURN(
-          Layout host_mesh_layout,
-          Layout::GetLayout(Layout::LayoutType::kStatic,
-                            layouts[i].sharding_spec_strs(), mesh));
+      Layout host_mesh_layout = layouts[i];
+      host_mesh_layout.set_mesh(mesh);
       output_layouts[i] = host_mesh_layout;
     }
     return output_layouts;

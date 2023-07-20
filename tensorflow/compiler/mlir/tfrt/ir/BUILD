@@ -2,9 +2,6 @@
 
 load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library", "td_library")
 
-# Note: keep the following lines separate due to the way copybara works
-load("//tensorflow:tensorflow.default.bzl", "get_compatible_with_portable")
-
 package(
     # copybara:uncomment default_applicable_licenses = ["//tensorflow:license"],
     licenses = ["notice"],
@@ -16,12 +13,11 @@ cc_library(
         "tfrt_fallback.cc",
     ],
     hdrs = ["tfrt_fallback.h"],
-    compatible_with = get_compatible_with_portable(),  # copybara: comment
     visibility = [
         # copybara:uncomment "//learning/brain/experimental/tfrt:__subpackages__",
         # copybara:uncomment "//learning/brain/tfrt/tpu/compiler:__subpackages__",
         "//tensorflow/compiler/mlir/tfrt:__subpackages__",
-        "//tensorflow/core/runtime_fallback:internal",
+        # copybara:uncomment "//tensorflow/core/runtime_fallback:internal",
         # copybara:uncomment "//third_party/tf_runtime_google:__subpackages__",
     ],
     deps = [
@@ -36,12 +32,10 @@ cc_library(
         "tfrt_fallback_async.cc",
     ],
     hdrs = ["tfrt_fallback_async.h"],
-    compatible_with = get_compatible_with_portable(),  # copybara: comment
     visibility = [
         # copybara:uncomment "//learning/brain/experimental/tfrt:__subpackages__",
-        # copybara:uncomment "//learning/brain/tfrt/tpu/compiler/mlir:__subpackages__",
         "//tensorflow/compiler/mlir/tfrt:__subpackages__",
-        "//tensorflow/core/runtime_fallback:__subpackages__",
+        # copybara:uncomment "//tensorflow/core/runtime_fallback:internal",
     ],
     deps = [
         ":tfrt_fallback_async_opdefs_inc_gen",
@@ -67,7 +61,7 @@ cc_library(
     hdrs = ["tfrt_fallback_sync.h"],
     visibility = [
         "//tensorflow/compiler/mlir/tfrt:__subpackages__",
-        "//tensorflow/core/runtime_fallback:internal",
+        # copybara:uncomment "//tensorflow/core/runtime_fallback:internal",
         "//tensorflow/core/tfrt/mlrt/application/tensorflow/tests:__subpackages__",
     ],
     deps = [
@@ -87,7 +81,6 @@ cc_library(
     name = "tfrt_fallback_common",
     srcs = ["tfrt_fallback_common.cc"],
     hdrs = ["tfrt_fallback_common.h"],
-    compatible_with = get_compatible_with_portable(),  # copybara: comment
     deps = [
         "@llvm-project//llvm:Support",
         "@llvm-project//mlir:IR",
@@ -114,7 +107,6 @@ td_library(
         "tfrt_fallback_async.td",
         "tfrt_fallback_sync.td",
     ],
-    compatible_with = get_compatible_with_portable(),  # copybara: comment
     includes = ["."],
     visibility = [
         "//learning/brain/experimental/tfrt:__subpackages__",
@@ -132,7 +124,6 @@ td_library(
 
 gentbl_cc_library(
     name = "tfrt_fallback_opdefs_inc_gen",
-    compatible_with = get_compatible_with_portable(),  # copybara: comment
     tbl_outs = [
         (
             ["-gen-op-decls"],
@@ -150,7 +141,6 @@ gentbl_cc_library(
 
 gentbl_cc_library(
     name = "tfrt_fallback_async_opdefs_inc_gen",
-    compatible_with = get_compatible_with_portable(),  # copybara: comment
     tbl_outs = [
         (
             ["-gen-op-decls"],

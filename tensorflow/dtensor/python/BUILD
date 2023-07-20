@@ -305,7 +305,6 @@ pytype_strict_library(
         ":config",
         ":layout",
         "//tensorflow/python/data/experimental/ops:data_service_ops",
-        "//tensorflow/python/data/experimental/ops:distribute",
         "//tensorflow/python/data/ops:dataset_ops",
         "//tensorflow/python/data/ops:iterator_ops",
         "//tensorflow/python/eager:context",

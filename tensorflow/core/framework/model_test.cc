@@ -3136,12 +3136,12 @@ TEST_F(ModelTimingTest, ComputeTargetTime_TestWindow) {
   EXPECT_DOUBLE_EQ(10.0, model_->ComputeTargetTimeNsec() * 1e-3);
 }
 
-TEST_F(ModelTimingTest, ComputeSnapshotProcessingTimeEmptyModel) {
+TEST_F(ModelTimingTest, ComputeProcessingTimeEmptyModel) {
   model::Model model;
-  EXPECT_EQ(model.ComputeSnapshotProcessingTimeNsec(), 0.0);
+  EXPECT_EQ(model.ComputeProcessingTimeNsec(), 0.0);
 }
 
-TEST_F(ModelTimingTest, ComputeSnapshotProcessingTimeNullSnapshot) {
+TEST_F(ModelTimingTest, ComputeProcessingTimeSingleStage1) {
   BuildModelFromProto(R"pb(
     nodes: {
       key: 1
@@ -3178,55 +3178,10 @@ TEST_F(ModelTimingTest, ComputeSnapshotProcessingTimeNullSnapshot) {
     output: 1
   )pb");
 
-  EXPECT_EQ(model_->ComputeSnapshotProcessingTimeNsec(), 0.0);
+  EXPECT_EQ(model_->ComputeProcessingTimeNsec(), 1100.0);
 }
 
-TEST_F(ModelTimingTest, ComputeSnapshotProcessingTimeSingleStage1) {
-  BuildModelFromProto(R"pb(
-    nodes: {
-      key: 1
-      value: {
-        id: 1
-        name: "ParallelMapV2"
-        autotune: true
-        num_elements: 100
-        processing_time: 20000
-        node_class: ASYNC_KNOWN_RATIO
-        ratio: 1
-        inputs: 2
-        parameters: {
-          name: "parallelism"
-          value: 2
-          min: 1
-          max: 16
-          tunable: true
-        }
-      }
-    }
-    nodes: {
-      key: 2
-      value: {
-        id: 2
-        name: "SSTable"
-        autotune: true
-        num_elements: 100
-        processing_time: 100000
-        node_class: KNOWN_RATIO
-        ratio: 1
-      }
-    }
-    output: 1
-  )pb");
-
-  CancellationManager cancellation_manager;
-  // Ensure the model snapshot is populated.
-  model_->Optimize(AutotuneAlgorithm::STAGE_BASED, /*cpu_budget=*/1,
-                   /*ram_budget=*/1, /*model_input_time=*/1000000,
-                   &cancellation_manager);
-  EXPECT_EQ(model_->ComputeSnapshotProcessingTimeNsec(), 1200.0);
-}
-
-TEST_F(ModelTimingTest, ComputeSnapshotProcessingTimeSingleStage2) {
+TEST_F(ModelTimingTest, ComputeProcessingTimeSingleStage2) {
   BuildModelFromProto(R"pb(
     nodes: {
       key: 1
@@ -3263,15 +3218,10 @@ TEST_F(ModelTimingTest, ComputeSnapshotProcessingTimeSingleStage2) {
     output: 1
   )pb");
 
-  CancellationManager cancellation_manager;
-  // Ensure the model snapshot is populated.
-  model_->Optimize(AutotuneAlgorithm::STAGE_BASED, /*cpu_budget=*/1,
-                   /*ram_budget=*/1, /*model_input_time=*/1000000,
-                   &cancellation_manager);
-  EXPECT_EQ(model_->ComputeSnapshotProcessingTimeNsec(), 1500.0);
+  EXPECT_EQ(model_->ComputeProcessingTimeNsec(), 1250.0);
 }
 
-TEST_F(ModelTimingTest, ComputeSnapshotProcessingTimeMultipleStages) {
+TEST_F(ModelTimingTest, ComputeProcessingTimeMultipleStages) {
   BuildModelFromProto(R"pb(
     nodes: {
       key: 1
@@ -3341,12 +3291,7 @@ TEST_F(ModelTimingTest, ComputeSnapshotProcessingTimeMultipleStages) {
     output: 1
   )pb");
 
-  CancellationManager cancellation_manager;
-  // Ensure the model snapshot is populated.
-  model_->Optimize(AutotuneAlgorithm::STAGE_BASED, /*cpu_budget=*/1,
-                   /*ram_budget=*/1, /*model_input_time=*/1000000,
-                   &cancellation_manager);
-  EXPECT_EQ(model_->ComputeSnapshotProcessingTimeNsec(), 1500.0);
+  EXPECT_EQ(model_->ComputeProcessingTimeNsec(), 1250.0);
 }
 
 TEST_F(ModelTimingTest, SelfTime) {

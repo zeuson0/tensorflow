@@ -23,17 +23,6 @@ cc_library(
 )
 
 cc_library(
-    name = "stack_location_utils",
-    srcs = ["stack_location_utils.cc"],
-    hdrs = ["stack_location_utils.h"],
-    deps = [
-        "//tensorflow/compiler/xla/hlo/ir:hlo",
-        "//tensorflow/compiler/xla/service:hlo_proto_cc",
-        "@llvm-project//mlir:IR",
-    ],
-)
-
-cc_library(
     name = "hlo_module_importer",
     srcs = [
         "hlo_function_importer.cc",
@@ -126,7 +115,6 @@ cc_library(
     srcs = ["location_importer.cc"],
     hdrs = ["location_importer.h"],
     deps = [
-        "stack_location_utils",
         "//tensorflow/compiler/xla/hlo/ir:hlo",
         "@llvm-project//mlir:IR",
     ],

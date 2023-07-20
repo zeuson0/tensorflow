@@ -95,12 +95,8 @@ _TENSORFLOW_DOC_SOURCES = {
         DocSource(docstring_module_name='platform.sysconfig'),
     'test':
         DocSource(docstring_module_name='platform.test'),
-    'train': DocSource(
-        docstring=(
-            'Support for training models. See the'
-            ' [Training](https://tensorflow.org/api_guides/python/train) guide.'
-        )
-    ),
+    'train':
+        DocSource(docstring_module_name='training.training'),
 }
 
 _ESTIMATOR_DOC_SOURCES = {

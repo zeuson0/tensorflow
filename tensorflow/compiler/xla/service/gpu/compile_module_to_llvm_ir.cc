@@ -327,6 +327,7 @@ Status CompileModuleToLlvmIrImpl(
         },
         // Assume 75% of the total device memory is available for XLA.
         /*memory_limit_bytes=*/gpu_device_info.device_memory_size * 0.75,
+        HloRematerialization::RematerializationPass::kPostFusion,
         /*block_size_limit=*/1, /*block_rematerialization_factor=*/1,
         /*compact_shape_function=*/nullptr,
         HloRematerialization::RematerializationMode::kRecomputeAndCompress);
@@ -392,9 +393,9 @@ Status CompileModuleToLlvmIrImpl(
       &results->output_shape, &results->entry_func_attrs));
 
   IrEmitterContext ir_emitter_context(
-      hlo_module, /*buffer_assignment=*/nullptr, platform_name, gpu_device_info,
-      cuda_compute_capability, rocm_compute_capability, &mlir_context,
-      results->llvm_module.get());
+      /*hlo_module=*/nullptr, /*buffer_assignment=*/nullptr, platform_name,
+      gpu_device_info, cuda_compute_capability, rocm_compute_capability,
+      &mlir_context, results->llvm_module.get());
 
   ir_emitter_context.set_allocations(results->allocations);
 

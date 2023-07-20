@@ -268,20 +268,7 @@ class PjRtCApiBuffer : public PjRtBuffer {
 
   absl::Span<const int64_t> dimensions() const override;
 
-  const Layout& layout() const override;
-
-  // PJRT C API doesn't support tuple buffers.
-  bool IsTuple() const override { return false; }
-
   const Shape& on_device_shape() const override;
-
-  bool has_dynamic_dimensions() const override;
-
-  absl::Span<const bool> is_dynamic_dimension() const override {
-    LOG(FATAL) << "PjRtCApiBuffer::is_dynamic_dimension() not implemented. "
-               << "Considering using has_dynamic_dimensions() or "
-                  "logical_dimensions() if applicable.";
-  }
 
   StatusOr<std::vector<int64_t>> logical_dimensions() override;
 
@@ -362,10 +349,6 @@ class PjRtCApiBuffer : public PjRtBuffer {
   // `readiness_promise` is destroyed before `readiness_event`, and the callback
   // we set on `readiness_event` modifies `readiness_promise_`.
   std::shared_ptr<PjRtFuture<Status>::Promise> readiness_promise_;
-  // Set and cached the first time layout() is called.
-  mutable std::optional<xla::Layout> layout_;
-  // Used to synchronize concurrent setting of cached values.
-  mutable absl::Mutex mu_;
 };
 
 class PjRtCApiExecutable : public PjRtExecutable {

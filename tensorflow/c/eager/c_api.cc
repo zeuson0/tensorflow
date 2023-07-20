@@ -166,17 +166,6 @@ TF_CAPI_EXPORT extern void TFE_ContextSetServerDef(TFE_Context* ctx,
                                                    const void* proto,
                                                    size_t proto_len,
                                                    TF_Status* status) {
-  TFE_ContextSetServerDefWithTimeout(ctx, keep_alive_secs, proto, proto_len,
-                                     /*init_timeout_in_ms=*/0, status);
-}
-
-// Set server_def on the context, possibly updating it.
-// TODO(b/291142876) Simplify TFE_ContextSetServerDefWithTimeout and
-// TFE_ContextUpdateServerDefWithTimeout to be simple wrappers around the same
-// C++ function.
-TF_CAPI_EXPORT extern void TFE_ContextSetServerDefWithTimeout(
-    TFE_Context* ctx, int keep_alive_secs, const void* proto, size_t proto_len,
-    int64_t init_timeout_in_ms, TF_Status* status) {
 #if defined(IS_MOBILE_PLATFORM)
   status->status = tensorflow::errors::Unimplemented(
       "TFE_ContextSetServerDef not supported on mobile");
@@ -189,8 +178,7 @@ TF_CAPI_EXPORT extern void TFE_ContextSetServerDefWithTimeout(
   }
   status->status =
       tensorflow::unwrap(ctx)->GetDistributedManager()->SetOrUpdateServerDef(
-          server_def, /*reset_context=*/true, keep_alive_secs,
-          init_timeout_in_ms);
+          server_def, /*reset_context=*/true, keep_alive_secs);
 #endif  // !IS_MOBILE_PLATFORM
 }
 
@@ -199,16 +187,9 @@ TF_CAPI_EXPORT extern void TFE_ContextUpdateServerDef(TFE_Context* ctx,
                                                       const void* proto,
                                                       size_t proto_len,
                                                       TF_Status* status) {
-  TFE_ContextUpdateServerDefWithTimeout(ctx, keep_alive_secs, proto, proto_len,
-                                        /*init_timeout_in_ms=*/0, status);
-}
-
-TF_CAPI_EXPORT extern void TFE_ContextUpdateServerDefWithTimeout(
-    TFE_Context* ctx, int keep_alive_secs, const void* proto, size_t proto_len,
-    int64_t init_timeout_in_ms, TF_Status* status) {
 #if defined(IS_MOBILE_PLATFORM)
   status->status = tensorflow::errors::Unimplemented(
-      "TFE_ContextUpdateServerDef not supported on mobile");
+      "TFE_ContextSetServerDef not supported on mobile");
 #else   // !defined(IS_MOBILE_PLATFORM)
   tensorflow::ServerDef server_def;
   tensorflow::EagerContext* context =
@@ -224,8 +205,7 @@ TF_CAPI_EXPORT extern void TFE_ContextUpdateServerDefWithTimeout(
   }
   status->status =
       tensorflow::unwrap(ctx)->GetDistributedManager()->SetOrUpdateServerDef(
-          server_def, /*reset_context=*/false, keep_alive_secs,
-          init_timeout_in_ms);
+          server_def, /*reset_context=*/false, keep_alive_secs);
 #endif  // !IS_MOBILE_PLATFORM
 }
 

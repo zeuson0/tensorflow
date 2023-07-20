@@ -18,10 +18,9 @@ limitations under the License.
 
 #include <atomic>
 #include <memory>
-#include <optional>
-#include <string>
 #include <utility>
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/container/node_hash_map.h"
 #include "tensorflow/compiler/xla/runtime/custom_call_registry.h"
 #include "tensorflow/compiler/xla/runtime/executable.h"
@@ -81,40 +80,29 @@ class StreamExecutorGraphInstances
 #endif  // #if GOOGLE_CUDA
 
 // Xla executable keeps a mapping from stream executors to graph instances.
-//
-// Graph instances allocate on-device memory, so we periodically destroy
-// them to free up some space on device. JAX for example keeps all XLA
-// executables alive, and destroys them when the process shuts down, so we can
-// end up with thousands of unused (or rarely used) graphs in device memory.
 class GraphInstances {
  public:
-  struct Impl;
-
-  GraphInstances(std::string module_name, int64_t num_graphs);
-  ~GraphInstances();
-
-  std::shared_ptr<StreamExecutorGraphInstances> operator()(
-      se::StreamExecutor* executor);
+  StreamExecutorGraphInstances* operator()(se::StreamExecutor* executor);
 
   // Instantiates all Gpu graphs defined by the given executable using user
   // provided run options. This guarantees that once we start execution, all Gpu
   // graphs are ready, and will only require cheap update operation and will not
   // require allocating new resources (we avoid non deterministic OOM errors).
-  //
-  // If timeout is not nullopt it will evict all previously instantiated graphs
-  // that were used more than `eviction_timeout_seconds` seconds ago.
-  Status InstantiateAllGraphs(
-      const ServiceExecutableRunOptions* run_options,
-      const runtime::Executable& executable,
-      const runtime::CustomCall::UserData& user_data, void* ptr,
-      std::optional<uint64_t> eviction_timeout_seconds = std::nullopt);
+  Status InstantiateAllGraphs(const ServiceExecutableRunOptions* run_options,
+                              const runtime::Executable& executable,
+                              const runtime::CustomCall::UserData& user_data,
+                              void* ptr);
 
   // Returns true if all Gpu graphs were already instantiated.
   bool InstantiatedAllGraphs(const ServiceExecutableRunOptions* run_options,
                              const runtime::Executable& executable);
 
  private:
-  std::shared_ptr<Impl> impl_;
+  mutable absl::Mutex mutex_;
+  absl::node_hash_map<se::StreamExecutor*, StreamExecutorGraphInstances> graphs_
+      ABSL_GUARDED_BY(mutex_);
+  absl::flat_hash_set<se::StreamExecutor*> instantiated_
+      ABSL_GUARDED_BY(mutex_);
 };
 
 // Xla executable keeps a mapping from stream executors to execution counts.

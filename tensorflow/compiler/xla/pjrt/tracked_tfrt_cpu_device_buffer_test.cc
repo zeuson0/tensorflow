@@ -18,6 +18,7 @@ limitations under the License.
 #include <cstring>
 #include <string>
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 namespace xla {

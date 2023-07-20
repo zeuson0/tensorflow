@@ -70,9 +70,9 @@ class GatherCommonSPMDExpander : public SPMDExpanderBase {
     // params layout for all non-axis dim. Other cases needs either a slicing or
     // all-concat, which can be added later.
     {
-      Mesh mesh = params_layout.mesh();
-      std::vector<std::string> tgt_params_sharding_specs;
-      tgt_params_sharding_specs.reserve(params_rank);
+      LayoutProto tgt_params_layout;
+      TF_ASSIGN_OR_RETURN(*tgt_params_layout.mutable_mesh_config(),
+                          params_layout.mesh().ToProto());
       // check the first half
       for (int i = 0; i < axis; ++i) {
         const std::string& dim_name = params_layout.sharding_spec(i);
@@ -84,10 +84,11 @@ class GatherCommonSPMDExpander : public SPMDExpanderBase {
                   i, params_layout.ToString(), output_layout.ToString(), axis)
                   .str());
         }
-        tgt_params_sharding_specs.push_back(dim_name);
+        tgt_params_layout.add_sharding_specs()->set_sharding_spec(dim_name);
       }
       // Set replicated for `axis` dim.
-      tgt_params_sharding_specs.push_back(Layout::kUnshardedDim);
+      tgt_params_layout.add_sharding_specs()->set_sharding_spec(
+          Layout::kUnshardedDim);
       // Check the second half
       for (int i = axis + 1; i < params_rank; ++i) {
         const std::string& dim_name = params_layout.sharding_spec(i);
@@ -104,7 +105,7 @@ class GatherCommonSPMDExpander : public SPMDExpanderBase {
                   i, params_layout.ToString(), output_layout.ToString(), axis)
                   .str());
         }
-        tgt_params_sharding_specs.push_back(dim_name);
+        tgt_params_layout.add_sharding_specs()->set_sharding_spec(dim_name);
       }
 
       if (!Layout::IsUnshardedDimension(params_layout.sharding_spec(axis))) {
@@ -114,12 +115,10 @@ class GatherCommonSPMDExpander : public SPMDExpanderBase {
               "tensor for ResourceGatherOp. Please unshard dimension ",
               axis);
         }
-        TF_ASSIGN_OR_RETURN(Layout tgt_params_layout,
-                            Layout::GetLayout(params_layout.type(),
-                                              tgt_params_sharding_specs, mesh));
         TF_ASSIGN_OR_RETURN(
             params,
-            EmitAllGather(builder, params, params_layout, tgt_params_layout));
+            EmitAllGather(builder, params, params_layout,
+                          Layout::FromProto(tgt_params_layout).value()));
       }
     }
 
@@ -129,9 +128,9 @@ class GatherCommonSPMDExpander : public SPMDExpanderBase {
     // Indices shape is not big typically. Relayouting is expected to be cheap.
     {
       bool indices_relayout_needed = false;
-      Mesh mesh = output_layout.mesh();
-      std::vector<std::string> tgt_indices_sharding_specs;
-      tgt_indices_sharding_specs.reserve(indices_rank);
+      LayoutProto tgt_indices_layout;
+      TF_ASSIGN_OR_RETURN(*tgt_indices_layout.mutable_mesh_config(),
+                          output_layout.mesh().ToProto());
       for (int i = 0; i < indices_rank; ++i) {
         int index_in_output;
         int index_in_indices;
@@ -152,7 +151,7 @@ class GatherCommonSPMDExpander : public SPMDExpanderBase {
           index_in_output = i + axis - batch_dims;
           index_in_indices = i;
         }
-        tgt_indices_sharding_specs.push_back(
+        tgt_indices_layout.add_sharding_specs()->set_sharding_spec(
             output_layout.sharding_spec(index_in_output));
 
         if (output_layout.sharding_spec(index_in_output) !=
@@ -163,11 +162,9 @@ class GatherCommonSPMDExpander : public SPMDExpanderBase {
 
       if (indices_relayout_needed) {
         TF_ASSIGN_OR_RETURN(
-            Layout tgt_indices_layout,
-            Layout::GetLayout(indices_layout.type(), tgt_indices_sharding_specs,
-                              mesh));
-        TF_ASSIGN_OR_RETURN(
-            indices, EmitRelayout(indices, indices_layout, tgt_indices_layout));
+            indices,
+            EmitRelayout(indices, indices_layout,
+                         Layout::FromProto(tgt_indices_layout).value()));
       }
     }
 
