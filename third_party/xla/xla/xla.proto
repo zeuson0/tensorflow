@@ -587,6 +587,8 @@ message DebugOptions {
   // transformation.
   int64 xla_gpu_collective_permute_decomposer_threshold = 237;
 
+  bool xla_gpu_enable_all_reduce_into_scan_loop_code_motion = 315;
+
   enum PartitioningAlgorithm {
     PARTITIONING_ALGORITHM_NOOP = 0;
     PARTITIONING_ALGORITHM_EXP0 = 1;
@@ -843,7 +845,7 @@ message DebugOptions {
   // command buffer.
   repeated string legacy_command_buffer_custom_call_targets = 314;
 
-  // Next id: 315
+  // Next id: 316
 
   // Extra options to pass to the compilation backend (e.g. LLVM); specific
   // interpretation of these values is left to the backend.
