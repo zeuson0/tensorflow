@@ -76,7 +76,7 @@ pybind_extension(
         "//tensorflow/core:framework",
         "//tensorflow/core/framework:reader_base",
         "//tensorflow/core:lib_headers_for_pybind",
-        "//tensorflow/core/profiler/internal:print_model_analysis_hdr",
+        "//tensorflow/core/profiler/internal:print_model_analysis",
         "//third_party/python_runtime:headers",
         "@com_google_absl//absl/strings",
         "@eigen_archive//:eigen3",
@@ -135,12 +135,12 @@ pybind_extension(
     name = "_pywrap_kernel_registry",
     srcs = [
         "kernel_registry_wrapper.cc",
-        "kernel_registry.h"
     ],
     data = [
         "_pywrap_kernel_registry.pyi",
     ],
     deps = [
+        ":kernel_registry",
         "//tensorflow/core:framework",
         "//tensorflow/core/framework:reader_base",
         "//tensorflow/core:lib_headers_for_pybind",
