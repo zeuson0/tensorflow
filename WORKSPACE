@@ -58,6 +58,24 @@ cc_library(
     ),
 }
 
+load("@rules_python//python/pip_install:pip_repository.bzl", "whl_library")
+
+# Some TensorFlow targets depend on headers inside the NumPy wheel. When
+# cross-compiling from Linux to Mac, we need to make sure that those headers
+# come from the macOS version of the wheel to avoid running into errors.
+whl_library(
+    name = "pypi_numpy_macos",
+    annotation = "//tensorflow/tools/toolchains/cross_compile/config:macos_annotations.json",
+    download_only = True,
+    extra_pip_args = ["--only-binary=:all:", "--platform", "macosx_10_9_x86_64"],
+    repo = "",
+    repo_mapping = {},
+    # LINT.IfChange
+    requirement = "numpy~=1.23.5",
+    # LINT.ThenChange(//depot/google3/third_party/tensorflow/opensource_only/ci/official/requirements_updater/requirements.in)
+
+)
+
 pip_parse(
     name = "pypi",
     annotations = NUMPY_ANNOTATIONS,

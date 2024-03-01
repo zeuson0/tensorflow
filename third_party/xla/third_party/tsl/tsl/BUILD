@@ -168,11 +168,21 @@ config_setting(
     visibility = ["//visibility:public"],
 )
 
+config_setting(
+    name = "linux_to_macos_crosscompile",
+    values = {
+        "apple_platform_type": "macos",
+        "cpu": "darwin",
+        "host_cpu": "k8",
+    },
+)
+
 selects.config_setting_group(
     name = "macos",
     match_any = [
         ":macos_x86_64",
         ":macos_arm64",
+        ":linux_to_macos_crosscompile",
     ],
     visibility = ["//visibility:public"],
 )

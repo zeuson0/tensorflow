@@ -1,0 +1,2 @@
+{"additive_build_content": "filegroup(\n    name = \"includes\",\n    srcs = glob([\"site-packages/numpy/core/include/**/*.h\"]),\n)\ncc_library(\n    name = \"numpy_headers\",\n    hdrs = [\":includes\"],\n    strip_include_prefix=\"site-packages/numpy/core/include/\",\n)\n", "copy_executables": {}, "copy_files": {}, "data": [], "data_exclude_glob": [], "srcs_exclude_glob": []}
+
