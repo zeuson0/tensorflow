@@ -9,7 +9,7 @@ platform(
         "@platforms//cpu:x86_64",
     ],
     exec_properties = {
-        "container-image": "docker://gcr.io/tensorflow-testing/ml-devinfra-linux-aarch64-cross-compile@sha256:11c5ac3b9b4e01cfa82b39b90826a9bfc5b806ccc92cd3d272e6bf861de43be1",
+        "container-image": "docker://us.gcr.io/tensorflow-testing/srnitin-macos-cross-compile@sha256:a7bf437b3adf87ebcfa510c84780f68cafb6c31f1af8f95acc0bc7ea37cedb31",
         "OSFamily": "Linux",
     },
 )
