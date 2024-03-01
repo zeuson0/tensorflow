@@ -43,3 +43,17 @@ toolchain(
     toolchain = "//tensorflow/tools/toolchains/cross_compile/cc:macos_x86_toolchain",
     toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
 )
+
+toolchain(
+    name = "macos-x86-cross-compile-py-toolchain",
+    exec_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    target_compatible_with = [
+        "@platforms//os:macos",
+        "@platforms//cpu:x86_64",
+    ],
+    toolchain = "@python_x86_64-unknown-linux-gnu//:python_runtimes",
+    toolchain_type = "@bazel_tools//tools/python:toolchain_type",
+)
