@@ -817,7 +817,7 @@ build:macos_x86_pycpp_test_filters --keep_going --test_lang_filters=cc,py --test
 build:macos_x86_pycpp_test --config=macos_x86_pycpp_test_filters -- //tensorflow/... -//tensorflow/compiler/tf2tensorrt/... -//tensorflow/core/tpu/... -//tensorflow/go/... -//tensorflow/java/... -//tensorflow/python/integration_testing/... -//tensorflow/tools/toolchains/... -//tensorflow/lite/... -//tensorflow/compiler/aot/...
 # CROSS-COMPILE MACOS X86 PYCPP
 build:cross_compile_macos_x86_pycpp_test --config=macos_x86_pycpp_test
-build:cross_compile_macos_x86_pycpp_test -//tensorflow/core/kernels:quantized_conv_ops_test -//tensorflow/core/kernels:quantized_matmul_op_test -//tensorflow/python/ops:quantized_conv_ops_test -//tensorflow/tools/graph_transforms:transforms_test -//tensorflow/python/tools:aot_compiled_test
+build:cross_compile_macos_x86_pycpp_test -//tensorflow/core/kernels:quantized_conv_ops_test -//tensorflow/core/kernels:quantized_matmul_op_test -//tensorflow/python/ops:quantized_conv_ops_test -//tensorflow/tools/graph_transforms:transforms_test -//tensorflow/python/tools:aot_compiled_test -//tensorflow/compiler/mlir/quantization/tensorflow/cc:constant_fold_test
 # END TF TEST SUITE OPTIONS
 
 # START CROSS-COMPILE CONFIGS
@@ -854,6 +854,7 @@ test:rbe_cross_compile_linux_arm64 --config=rbe_cross_compile_base
 # END LINUX AARCH64 CROSS-COMPILE CONFIGS
 
 # START MACOS CROSS-COMPILE CONFIGS
+build:cross_compile_macos_x86 --noenable_platform_specific_config
 build:cross_compile_macos_x86 --config=no_tfrt
 build:cross_compile_macos_x86 --config=cross_compile_base
 build:cross_compile_macos_x86 --config=nonccl
