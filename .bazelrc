@@ -846,6 +846,7 @@ build:cross_compile_linux_arm64 --config=cross_compile_base
 build:cross_compile_linux_arm64 --platforms=//tensorflow/tools/toolchains/cross_compile/config:linux_aarch64
 build:cross_compile_linux_arm64 --cpu=aarch64
 build:cross_compile_linux_arm64 --crosstool_top=//tensorflow/tools/toolchains/cross_compile/cc:cross_compile_toolchain_suite
+build:cross_compile_linux_arm64 --extra_toolchains=//tensorflow/tools/toolchains/cross_compile/config:linux-arm64-cross-compile-py-toolchain
 
 # RBE cross-compile configs for Linux Aarch64
 build:rbe_cross_compile_linux_arm64 --config=cross_compile_linux_arm64
