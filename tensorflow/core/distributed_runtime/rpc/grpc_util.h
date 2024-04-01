@@ -133,7 +133,9 @@ bool GrpcMaybeParseProto(::grpc::ByteBuffer* src, string* dst);
 
 // Copy grpc buffer src to tstring *dst.
 bool GrpcMaybeParseProto(::grpc::ByteBuffer* src, tstring* dst);
+std::shared_ptr<::grpc::ServerCredentials> GetCredentials();
 
+std::shared_ptr<::grpc::ChannelCredentials> GetChannelCredentials();
 }  // namespace tensorflow
 
 #endif  // TENSORFLOW_CORE_DISTRIBUTED_RUNTIME_RPC_GRPC_UTIL_H_

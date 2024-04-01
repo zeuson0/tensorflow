@@ -161,7 +161,7 @@ GrpcRPCFactory::ChannelPtr GrpcRPCFactory::CreateChannelForAddress(
   // (sometimes default) 20s.
   args.SetInt(GRPC_ARG_MAX_RECONNECT_BACKOFF_MS, 1000);
   return ::grpc::CreateCustomChannel(
-      /*target=*/address, ::grpc::InsecureChannelCredentials(), args);
+      /*target=*/address, GetChannelCredentials(), args);
 }
 
 void GrpcRPCFactory::CreateCall(const Tensor& request_t, const bool try_rpc,
