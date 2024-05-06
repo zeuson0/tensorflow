@@ -14,13 +14,16 @@ limitations under the License.
 ==============================================================================*/
 #include "tensorflow/core/kernels/data/concatenate_dataset_op.h"
 
-#include <string>
 #include <utility>
 
+#include "absl/status/status.h"
 #include "tensorflow/core/data/name_utils.h"
 #include "tensorflow/core/data/split_utils.h"
-#include "tensorflow/core/framework/partial_tensor_shape.h"
+#include "tensorflow/core/framework/dataset.h"
 #include "tensorflow/core/framework/tensor.h"
+#include "tsl/platform/errors.h"
+#include "tsl/platform/statusor.h"
+#include "tsl/platform/thread_annotations.h"
 
 namespace tensorflow {
 namespace data {
@@ -57,6 +60,12 @@ class ConcatenateDatasetOp::Dataset : public DatasetBase {
                      MostSpecificCompatibleShape(os_input[i], os_concatenate[i],
                                                  &output_tensorshape));
       output_shapes_.push_back(output_tensorshape);
+    }
+    if (input_ != nullptr && !input_->RandomIndexingCompatible().ok()) {
+      random_indexing_compatible_ = input->RandomIndexingCompatible();
+    } else if (to_concatenate_ != nullptr &&
+               !to_concatenate_->RandomIndexingCompatible().ok()) {
+      random_indexing_compatible_ = to_concatenate_->RandomIndexingCompatible();
     }
   }
   ~Dataset() override {
@@ -126,6 +135,10 @@ class ConcatenateDatasetOp::Dataset : public DatasetBase {
     return absl::OkStatus();
   }
 
+  absl::Status RandomIndexingCompatible() const override {
+    return random_indexing_compatible_;
+  }
+
  protected:
   Status AsGraphDefInternal(SerializationContext* ctx,
                             DatasetGraphDefBuilder* b,
@@ -149,12 +162,22 @@ class ConcatenateDatasetOp::Dataset : public DatasetBase {
     bool SymbolicCheckpointCompatible() const override { return true; }
 
     Status Initialize(IteratorContext* ctx) override {
+      mutex_lock l(mu_);
+      input_impls_.resize(2);
+      std::fill(end_of_sequence_, end_of_sequence_ + 2, false);
+
       TF_ASSIGN_OR_RETURN(input_contexts_,
                           CreateInputIteratorContexts(ctx, dataset()));
       TF_RETURN_IF_ERROR(dataset()->input_->MakeIterator(
           &input_contexts_[0], this, strings::StrCat(prefix(), "[0]"),
-          &input_impl_));
+          &input_impls_[0]));
+
+      TF_RETURN_IF_ERROR(dataset()->to_concatenate_->MakeIterator(
+          &input_contexts_[1], this, strings::StrCat(prefix(), "[1]"),
+          &input_impls_[1]));
+
       ctx->MergeCheckpoint(input_contexts_[0].checkpoint());
+      ctx->MergeCheckpoint(input_contexts_[1].checkpoint());
       return absl::OkStatus();
     }
 
@@ -162,25 +185,95 @@ class ConcatenateDatasetOp::Dataset : public DatasetBase {
                            std::vector<Tensor>* out_tensors,
                            bool* end_of_sequence) override {
       mutex_lock l(mu_);
-      if (!input_impl_) {
+      if (!input_impls_[0] && !input_impls_[1]) {
         *end_of_sequence = true;
         return absl::OkStatus();
       }
-      while (i_ < 2) {
-        TF_RETURN_IF_ERROR(input_impl_->GetNext(&input_contexts_[i_],
-                                                out_tensors, end_of_sequence));
+      // Global shuffling
+      if (ctx->index_mapper()) {
+        if (input_contexts_[0].index_mapper() == nullptr) {
+          IndexMapperFn new_index_mapper1 =
+              [index_mapper = ctx->index_mapper(),
+               input_cardinality = dataset()->input_cardinality_,
+               to_concat_cardinality = dataset()->to_concatenate_cardinality_](
+                  size_t idx) -> absl::StatusOr<size_t> {
+            TF_ASSIGN_OR_RETURN(size_t pidx, index_mapper(idx));
+            if (pidx >= input_cardinality + to_concat_cardinality) {
+              return absl::OutOfRangeError("Out of range");
+            }
+            if (pidx >= input_cardinality) {
+              // This has to return a status so that upstream global shuffle
+              // iterator will not treat it as an end of sequence.
+              return absl::NotFoundError("Skipping this element.");
+            }
+            return pidx;
+          };
+
+          IndexMapperFn new_index_mapper2 =
+              [index_mapper = ctx->index_mapper(),
+               input_cardinality = dataset()->input_cardinality_,
+               to_concat_cardinality = dataset()->to_concatenate_cardinality_](
+                  size_t idx) -> absl::StatusOr<size_t> {
+            TF_ASSIGN_OR_RETURN(size_t pidx, index_mapper(idx));
+            if (pidx >= input_cardinality + to_concat_cardinality) {
+              return absl::OutOfRangeError("Out of range");
+            }
+            if (pidx < input_cardinality) {
+              // This has to return a status so that upstream global shuffle
+              // iterator will not treat it as an end of sequence.
+              return absl::NotFoundError("Skipping this element.");
+            }
+            return pidx - input_cardinality;
+          };
+
+          input_contexts_[0].SetIndexMapper(new_index_mapper1);
+          input_contexts_[1].SetIndexMapper(new_index_mapper2);
+        }
+
+        // Materializes the shuffled index because we need this information
+        // to determine which iterator we need to call later.
+        absl::StatusOr<size_t> shuffled_index_or =
+            ctx->index_mapper()(element_count_++);
+
+        if (absl::IsOutOfRange(shuffled_index_or.status())) {
+          *end_of_sequence = true;
+          return absl::OkStatus();
+        }
+        TF_RETURN_IF_ERROR(shuffled_index_or.status());
+
+        // Routes the shuffle index to the right input iterator.
+        const size_t& shuffled_index = shuffled_index_or.value();
+        bool temp_end_of_sequence = false;
+        absl::Status status = absl::OkStatus();
+        if (shuffled_index < dataset()->input_cardinality_) {
+          status = input_impls_[0]->GetNext(&input_contexts_[0], out_tensors,
+                                            &temp_end_of_sequence);
+          ctx->MergeCheckpoint(input_contexts_[0].checkpoint());
+        } else {
+          status = input_impls_[1]->GetNext(&input_contexts_[1], out_tensors,
+                                            &temp_end_of_sequence);
+          ctx->MergeCheckpoint(input_contexts_[1].checkpoint());
+        }
+        TF_RETURN_IF_ERROR(status);
+
+        if (temp_end_of_sequence) {
+          *end_of_sequence = temp_end_of_sequence;
+          return absl::OkStatus();
+        }
+        return absl::OkStatus();
+      }
+
+      for (; i_ < 2; ++i_) {
+        TF_RETURN_IF_ERROR(input_impls_[i_]->GetNext(
+            &input_contexts_[i_], out_tensors, end_of_sequence));
         ctx->MergeCheckpoint(input_contexts_[i_].checkpoint());
         if (!*end_of_sequence) {
           return absl::OkStatus();
         }
-        if (++i_ < 2) {
-          TF_RETURN_IF_ERROR(dataset()->to_concatenate_->MakeIterator(
-              &input_contexts_[i_], this, strings::StrCat(prefix(), "[1]"),
-              &input_impl_));
-        }
       }
       *end_of_sequence = true;
-      input_impl_.reset();
+      input_impls_[0].reset();
+      input_impls_[1].reset();
       return absl::OkStatus();
     }
 
@@ -195,11 +288,17 @@ class ConcatenateDatasetOp::Dataset : public DatasetBase {
                         IteratorStateWriter* writer) override {
       mutex_lock l(mu_);
       TF_RETURN_IF_ERROR(writer->WriteScalar(prefix(), kIndex, i_));
-      TF_RETURN_IF_ERROR(
-          writer->WriteScalar(prefix(), kInputImplUninitialized,
-                              static_cast<int64_t>(!input_impl_)));
-      if (input_impl_) {
-        TF_RETURN_IF_ERROR(SaveInput(ctx, writer, input_impl_));
+      TF_RETURN_IF_ERROR(writer->WriteScalar(
+          prefix(), absl::StrFormat("%s[%d]", kInputImplUninitialized, 0),
+          static_cast<int64_t>(!input_impls_[0])));
+      if (input_impls_[0]) {
+        TF_RETURN_IF_ERROR(SaveInput(ctx, writer, input_impls_[0]));
+      }
+      TF_RETURN_IF_ERROR(writer->WriteScalar(
+          prefix(), absl::StrFormat("%s[%d]", kInputImplUninitialized, 1),
+          static_cast<int64_t>(!input_impls_[1])));
+      if (input_impls_[1]) {
+        TF_RETURN_IF_ERROR(SaveInput(ctx, writer, input_impls_[1]));
       }
       return absl::OkStatus();
     }
@@ -207,33 +306,54 @@ class ConcatenateDatasetOp::Dataset : public DatasetBase {
     Status RestoreInternal(IteratorContext* ctx,
                            IteratorStateReader* reader) override {
       mutex_lock l(mu_);
-      TF_RETURN_IF_ERROR(reader->ReadScalar(prefix(), kIndex, &i_));
-      int64_t input_uninitialized;
-      TF_RETURN_IF_ERROR(reader->ReadScalar(prefix(), kInputImplUninitialized,
-                                            &input_uninitialized));
-      if (static_cast<bool>(input_uninitialized)) {
-        input_impl_.reset();
+
+      if (ctx->restored_element_count()) {
+        if (input_impls_.size() != 2) {
+          return absl::FailedPreconditionError(
+              "`Initialize` should be called before restoring from the "
+              "checkpoint.");
+        }
+        element_count_ = *ctx->restored_element_count();
+        TF_RETURN_IF_ERROR(RestoreInput(ctx, reader, input_impls_[0]));
+        TF_RETURN_IF_ERROR(RestoreInput(ctx, reader, input_impls_[1]));
         return absl::OkStatus();
       }
+
+      TF_RETURN_IF_ERROR(reader->ReadScalar(prefix(), kIndex, &i_));
+      int64_t input_uninitialized;
+      TF_RETURN_IF_ERROR(reader->ReadScalar(
+          prefix(), absl::StrFormat("%s[%d]", kInputImplUninitialized, 0),
+          &input_uninitialized));
+      if (static_cast<bool>(input_uninitialized)) {
+        input_impls_[0].reset();
+      }
+      TF_RETURN_IF_ERROR(reader->ReadScalar(
+          prefix(), absl::StrFormat("%s[%d]", kInputImplUninitialized, 1),
+          &input_uninitialized));
+      if (static_cast<bool>(input_uninitialized)) {
+        input_impls_[1].reset();
+      }
+
       if (!TF_PREDICT_TRUE(i_ >= 0 && i_ <= 2))
         return errors::InvalidArgument("i_ must be in range [0, 2].");
-      if (i_ == 1) {
-        TF_RETURN_IF_ERROR(dataset()->to_concatenate_->MakeIterator(
-            ctx, this, strings::StrCat(prefix(), "[1]"), &input_impl_));
-      } else if (i_ == 2) {
-        input_impl_.reset();
+
+      if (input_impls_[0]) {
+        TF_RETURN_IF_ERROR(RestoreInput(ctx, reader, input_impls_[0]));
       }
-      if (input_impl_) {
-        TF_RETURN_IF_ERROR(RestoreInput(ctx, reader, input_impl_));
+      if (input_impls_[1]) {
+        TF_RETURN_IF_ERROR(RestoreInput(ctx, reader, input_impls_[1]));
       }
+
       return absl::OkStatus();
     }
 
    private:
     mutex mu_;
     int64_t i_ TF_GUARDED_BY(mu_);
-    std::unique_ptr<IteratorBase> input_impl_ TF_GUARDED_BY(mu_);
-    std::vector<IteratorContext> input_contexts_;
+    std::vector<std::unique_ptr<IteratorBase>> input_impls_ TF_GUARDED_BY(mu_);
+    std::vector<IteratorContext> input_contexts_ TF_GUARDED_BY(mu_);
+    bool end_of_sequence_[2] TF_GUARDED_BY(mu_);
+    int64_t element_count_ TF_GUARDED_BY(mu_) = 0;
   };
 
   Status MostSpecificCompatibleShape(const PartialTensorShape& ts1,
@@ -257,6 +377,7 @@ class ConcatenateDatasetOp::Dataset : public DatasetBase {
   const int64_t input_cardinality_;
   const int64_t to_concatenate_cardinality_;
   std::vector<PartialTensorShape> output_shapes_;
+  absl::Status random_indexing_compatible_ = absl::OkStatus();
 };
 
 ConcatenateDatasetOp::ConcatenateDatasetOp(OpKernelConstruction* ctx)
