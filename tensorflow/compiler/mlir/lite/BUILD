@@ -1,7 +1,13 @@
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
 load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library", "td_library")
+
+# Placeholder: load py_proto_library
 load("//tensorflow:tensorflow.bzl", "tf_cc_binary", "tf_cc_test", "tf_native_cc_binary")
 load("//tensorflow:tensorflow.default.bzl", "filegroup", "get_compatible_with_portable")
+load(
+    "//tensorflow/core/platform:build_config.bzl",
+    "tf_proto_library",
+)
 load("//tensorflow/core/platform:rules_cc.bzl", "cc_library")
 
 package(
@@ -1081,6 +1087,7 @@ cc_library(
     ],
     deps = [
         ":convert_type",
+        ":converter_flags_proto_cc",
         ":flatbuffer_tflite_operator_lib",
         ":low_bit_utils",
         ":stateful_ops_utils",
@@ -1106,7 +1113,6 @@ cc_library(
         "//tensorflow/lite/experimental/remat:metadata_util",
         "//tensorflow/lite/python/metrics:converter_error_data_proto_cc",
         "//tensorflow/lite/schema:schema_conversion_utils",
-        "//tensorflow/lite/toco:toco_flags_proto_cc",
         "//tensorflow/lite/tools/versioning",
         "//tensorflow/lite/tools/versioning:gpu_compatibility",
         "@com_google_absl//absl/algorithm:container",
@@ -1214,12 +1220,12 @@ cc_library(
         "utils/convert_type.h",
     ],
     deps = [
+        ":converter_flags_proto_cc",
         ":flatbuffer_export",
         ":flatbuffer_import",
         "//tensorflow/compiler/mlir:op_or_arg_name_mapper",
         "//tensorflow/compiler/mlir/lite/schema:schema_fbs",
         "//tensorflow/core:protos_all_cc",
-        "//tensorflow/lite/toco:toco_flags_proto_cc",
         "@com_google_absl//absl/strings",
         "@llvm-project//mlir:FuncDialect",
         "@llvm-project//mlir:IR",
@@ -1366,8 +1372,9 @@ cc_library(
     ],
     deps = [
         ":common",
+        ":converter_flags_proto_cc",
         ":fake_quant_utils",
-        ":tensorflow_lite_d2s",
+        ":tensorflow_lite_d2s",  # buildcleaner: keep
         ":tensorflow_lite_legalize_tf",  # buildcleaner: keep
         ":tensorflow_lite_optimize",  # buildcleaner: keep
         ":tensorflow_lite_optimize_batch_matmul",  # buildcleaner: keep
@@ -1388,7 +1395,6 @@ cc_library(
         "//tensorflow/compiler/mlir/tensorflow/transforms:tensorflow_passes",
         "//tensorflow/compiler/mlir/tensorflow/transforms:tf_saved_model_passes",
         "//tensorflow/core:core_cpu_base",
-        "//tensorflow/lite/toco:toco_flags_proto_cc",
         "@llvm-project//llvm:Support",
         "@llvm-project//mlir:FuncDialect",
         "@llvm-project//mlir:Pass",
@@ -1407,6 +1413,7 @@ cc_library(
     ],
     deps = [
         ":common",
+        ":converter_flags_proto_cc",
         ":flatbuffer_translate_lib",
         ":tensorflow_lite",
         ":tf_tfl_passes",
@@ -1443,7 +1450,6 @@ cc_library(
         "//tensorflow/lite/c:c_api_types",
         "//tensorflow/lite/experimental/remat:metadata_util",
         "//tensorflow/lite/python/metrics:converter_error_data_proto_cc",
-        "//tensorflow/lite/toco:toco_flags_proto_cc",
         "//tensorflow/lite/tools/optimize:quantize_weights",
         "//tensorflow/lite/tools/optimize:reduced_precision_support",
         "@com_google_absl//absl/log",
@@ -1525,3 +1531,63 @@ build_test(
         ":tensorflow_lite",
     ],
 )
+
+# OSS only: This target is header-only. Link `types_proto_cc_impl` only to
+# `libtensorflow_framework.so` via `lib_internal_impl`. Do NOT link `types_flags_proto_cc_impl`
+# directly unless the target does not link `libtensorflow_framework.so`.
+tf_proto_library(
+    name = "types_proto",
+    srcs = ["types.proto"],
+    cc_api_version = 2,
+    make_default_target_header_only = True,
+    visibility = ["//visibility:public"],
+)
+
+# OSS only: This target is header-only. Link `converter_flags_proto_cc_impl` only to
+# `libtensorflow_framework.so` via `lib_internal_impl`. Do NOT link `converter_flags_proto_cc_impl`
+# directly unless the target does not link `libtensorflow_framework.so`.
+tf_proto_library(
+    name = "converter_flags_proto",
+    srcs = ["converter_flags.proto"],
+    cc_api_version = 2,
+    make_default_target_header_only = True,
+    protodeps = [
+        "//tensorflow/compiler/mlir/quantization/stablehlo:quantization_options_proto",
+        "//tensorflow/compiler/mlir/quantization/stablehlo:quantization_config_proto",
+        "//tensorflow/compiler/mlir/lite/debug:debug_options_proto",
+        ":types_proto",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+tf_proto_library(
+    name = "model_flags_proto",
+    srcs = ["model_flags.proto"],
+    cc_api_version = 2,
+    make_default_target_header_only = True,
+    protodeps = [":types_proto"],
+    visibility = ["//visibility:public"],
+)
+
+# copybara:uncomment_begin(google-only)
+# py_proto_library(
+#     name = "model_flags_py_proto",
+#     api_version = 2,
+#     visibility = ["//visibility:public"],
+#     deps = [":model_flags_proto"],
+# )
+#
+# py_proto_library(
+#     name = "converter_flags_py_proto",
+#     api_version = 2,
+#     visibility = ["//visibility:public"],
+#     deps = [":converter_flags_proto"],
+# )
+#
+# py_proto_library(
+#     name = "types_py_proto",
+#     api_version = 2,
+#     visibility = ["//visibility:public"],
+#     deps = [":types_proto"],
+# )
+# copybara:uncomment_end

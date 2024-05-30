@@ -326,7 +326,8 @@ void AddPreVariableFreezingTFToTFLConversionPasses(
 // to resume the conversion after injecting more information in the middle of
 // it.
 void AddPostVariableFreezingTFToTFLConversionPasses(
-    llvm::StringRef saved_model_dir, const toco::TocoFlags& toco_flags,
+    llvm::StringRef saved_model_dir,
+    const tflite::ConverterFlags& converter_flags,
     const mlir::TFL::PassConfig& pass_config,
     mlir::OpPassManager* pass_manager) {
   // Note:
@@ -334,7 +335,7 @@ void AddPostVariableFreezingTFToTFLConversionPasses(
   // The tensorflow list is not supported right now by that pass.
   // Enable fusing composite ops that can be lowered to built-in TFLite ops.
   if (pass_config.emit_builtin_tflite_ops &&
-      toco_flags.tf_quantization_mode().empty()) {
+      converter_flags.tf_quantization_mode().empty()) {
     pass_manager->addPass(mlir::TFL::CreatePrepareCompositeFunctionsPass());
   }
 
@@ -346,15 +347,16 @@ void AddPostVariableFreezingTFToTFLConversionPasses(
   }
 
   if (pass_config.lower_tensor_list_ops &&
-      toco_flags.tf_quantization_mode().empty()) {
+      converter_flags.tf_quantization_mode().empty()) {
     // TODO(haoliang): Add this pass by default.
     pass_manager->addPass(mlir::TFL::CreateLowerStaticTensorListPass(
-        /*allow_tensorlist_pass_through=*/toco_flags.force_select_tf_ops() ||
-            toco_flags.enable_select_tf_ops(),
+        /*allow_tensorlist_pass_through=*/converter_flags
+                .force_select_tf_ops() ||
+            converter_flags.enable_select_tf_ops(),
         /*default_to_single_batch=*/
-        toco_flags.default_to_single_batch_in_tensor_list_ops(),
+        converter_flags.default_to_single_batch_in_tensor_list_ops(),
         /*enable_dynamic_update_slice=*/
-        toco_flags.enable_dynamic_update_slice()));
+        converter_flags.enable_dynamic_update_slice()));
   }
 
   // This pass does resource analysis of saved model global tensors and marks
@@ -409,10 +411,10 @@ void AddPostVariableFreezingTFToTFLConversionPasses(
   }
   // For TF Quantization, convert unsupported ops to Flex ops before other
   // conversion passes.
-  if (!toco_flags.tf_quantization_mode().empty()) {
+  if (!converter_flags.tf_quantization_mode().empty()) {
     pass_manager->addNestedPass<mlir::func::FuncOp>(
         mlir::TF::CreateFallbackToFlexOpsPass(
-            toco_flags.tf_quantization_mode()));
+            converter_flags.tf_quantization_mode()));
   }
   // The below passes only make sense if Builtin TFLite ops are enabled
   // for emission.
@@ -431,10 +433,11 @@ void AddPostVariableFreezingTFToTFLConversionPasses(
     // Prepare for TFLite dialect, rerun canonicalization, and then legalize to
     // the TFLite dialect.
     pass_manager->addNestedPass<mlir::func::FuncOp>(
-        mlir::TFL::CreatePrepareTFPass(pass_config.unfold_batch_matmul,
-                                       /*allow_bf16_and_f16_type_legalization=*/
-                                       !pass_config.runtime_verification,
-                                       toco_flags.use_fake_quant_num_bits()));
+        mlir::TFL::CreatePrepareTFPass(
+            pass_config.unfold_batch_matmul,
+            /*allow_bf16_and_f16_type_legalization=*/
+            !pass_config.runtime_verification,
+            converter_flags.use_fake_quant_num_bits()));
     pass_manager->addNestedPass<mlir::func::FuncOp>(
         mlir::createCanonicalizerPass());
     if (pass_config.shape_inference) {
@@ -467,8 +470,9 @@ void AddPostVariableFreezingTFToTFLConversionPasses(
     }
     pass_manager->addPass(mlir::TFL::CreatePushTransposeThroughEwisePass());
     pass_manager->addNestedPass<mlir::func::FuncOp>(
-        mlir::TFL::CreateOptimizePass(/*enable_canonicalization=*/true,
-                                      toco_flags.disable_fuse_mul_and_fc()));
+        mlir::TFL::CreateOptimizePass(
+            /*enable_canonicalization=*/true,
+            converter_flags.disable_fuse_mul_and_fc()));
 
     // This pass operates on TensorFlow ops but is triggered after legalization
     // so that it can target constants introduced once TensorFlow Identity ops
@@ -499,7 +503,7 @@ void AddPostVariableFreezingTFToTFLConversionPasses(
     pass_manager->addPass(mlir::createCanonicalizerPass());
 
     if (pass_config.reduce_type_precision ||
-        toco_flags.reduce_type_precision()) {
+        converter_flags.reduce_type_precision()) {
       pass_manager->addPass(mlir::TFL::CreateReduceTypePrecisionPass());
     }
 
@@ -531,18 +535,18 @@ void AddPostVariableFreezingTFToTFLConversionPasses(
 }
 
 void AddTFToTFLConversionPasses(llvm::StringRef saved_model_dir,
-                                const toco::TocoFlags& toco_flags,
+                                const tflite::ConverterFlags& converter_flags,
                                 const mlir::TFL::PassConfig& pass_config,
                                 mlir::OpPassManager* pass_manager) {
   AddPreVariableFreezingTFToTFLConversionPasses(pass_config, pass_manager);
-  AddPostVariableFreezingTFToTFLConversionPasses(saved_model_dir, toco_flags,
-                                                 pass_config, pass_manager);
+  AddPostVariableFreezingTFToTFLConversionPasses(
+      saved_model_dir, converter_flags, pass_config, pass_manager);
 }
 void AddTFToTFLConversionPasses(const mlir::TFL::PassConfig& pass_config,
                                 mlir::OpPassManager* pass_manager) {
-  const toco::TocoFlags toco_flags;
-  AddTFToTFLConversionPasses(/*saved_model_dir=*/"", toco_flags, pass_config,
-                             pass_manager);
+  const tflite::ConverterFlags converter_flags;
+  AddTFToTFLConversionPasses(/*saved_model_dir=*/"", converter_flags,
+                             pass_config, pass_manager);
 }
 
 }  // namespace tensorflow

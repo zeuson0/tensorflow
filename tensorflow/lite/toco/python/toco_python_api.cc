@@ -188,43 +188,12 @@ PyObject* TocoConvert(PyObject* model_flags_proto_txt_raw,
   }
 
   std::string output_file_contents_txt;
-  tensorflow::Status status;
+  tensorflow::Status status = absl::UnimplementedError(
+      "MLIR conversion not supported by TOCO converter.");
   int64_t arithmetic_ops_count;
 
   // Convert model.
-  if (enable_mlir_converter) {
-    if (model_flags.use_hlo_import() && model_flags.has_saved_model_dir()) {
-      PyErr_SetString(PyExc_ValueError,
-                      "Cannot specify both saved_model and hlo import.");
-      return nullptr;
-    }
-
-    if (model_flags.use_hlo_import()) {
-      status = tensorflow::ConvertJaxToTFLiteFlatBuffer(
-          input_contents_txt, model_flags, toco_flags,
-          &output_file_contents_txt);
-    } else if (!model_flags.saved_model_dir().empty()) {
-      status = tensorflow::ConvertSavedModelToTFLiteFlatBuffer(
-          model_flags, toco_flags, &output_file_contents_txt,
-          quantization_py_function_library);
-    } else {
-      tensorflow::GraphDef graph_def;
-      if (!graph_def.ParseFromString(input_contents_txt)) {
-        PyErr_SetString(PyExc_ValueError,
-                        "Failed to convert GraphDef to Python String.");
-        return nullptr;
-      }
-
-      status = tensorflow::ConvertGraphDefToTFLiteFlatBuffer(
-          model_flags, toco_flags, debug_info, graph_def,
-          &output_file_contents_txt);
-      if (!toco_flags.conversion_summary_dir().empty()) {
-        PopulateConversionLogHelper(
-            model_flags, &toco_flags, input_contents_txt,
-            output_file_contents_txt, status.message(), &dump_options);
-      }
-    }
-  } else {
+  if (!enable_mlir_converter) {
     status = Convert(input_contents_txt, toco_flags, model_flags,
                      &output_file_contents_txt, &arithmetic_ops_count);
   }

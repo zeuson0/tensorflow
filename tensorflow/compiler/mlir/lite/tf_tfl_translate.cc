@@ -296,31 +296,31 @@ int main(int argc, char **argv) {
   pass_config.disable_hlo_to_tfl_conversion = disable_hlo_to_tfl_conversion;
   pass_config.reduce_type_precision = reduce_type_precision;
 
-  toco::TocoFlags toco_flags;
-  toco_flags.set_force_select_tf_ops(!emit_builtin_tflite_ops);
-  toco_flags.set_enable_select_tf_ops(emit_select_tf_ops);
-  toco_flags.set_allow_custom_ops(emit_custom_ops);
-  toco_flags.set_allow_all_select_tf_ops(allow_all_select_tf_ops);
-  toco_flags.set_enable_dynamic_update_slice(enable_dynamic_update_slice);
-  toco_flags.set_post_training_quantize(post_training_quantization);
-  toco_flags.set_use_buffer_offset(use_buffer_offset);
-  toco_flags.set_legalize_custom_tensor_list_ops(
+  tflite::ConverterFlags converter_flags;
+  converter_flags.set_force_select_tf_ops(!emit_builtin_tflite_ops);
+  converter_flags.set_enable_select_tf_ops(emit_select_tf_ops);
+  converter_flags.set_allow_custom_ops(emit_custom_ops);
+  converter_flags.set_allow_all_select_tf_ops(allow_all_select_tf_ops);
+  converter_flags.set_enable_dynamic_update_slice(enable_dynamic_update_slice);
+  converter_flags.set_post_training_quantize(post_training_quantization);
+  converter_flags.set_use_buffer_offset(use_buffer_offset);
+  converter_flags.set_legalize_custom_tensor_list_ops(
       legalize_custom_tensor_list_ops);
-  toco_flags.set_reduce_type_precision(reduce_type_precision);
+  converter_flags.set_reduce_type_precision(reduce_type_precision);
   // Read list of user select ops.
   llvm::SmallVector<llvm::StringRef, 2> user_ops;
   (llvm::StringRef(select_user_tf_ops))
       .split(user_ops, ',', /*MaxSplit=*/-1,
              /*KeepEmpty=*/false);
-  llvm::for_each(user_ops, [&toco_flags](llvm::StringRef op_name) {
-    *(toco_flags.add_select_user_tf_ops()) = op_name.str();
+  llvm::for_each(user_ops, [&converter_flags](llvm::StringRef op_name) {
+    *(converter_flags.add_select_user_tf_ops()) = op_name.str();
   });
 
   std::string result;
   std::optional<tensorflow::Session *> session = std::nullopt;
   if (bundle) session = bundle->GetSession();
   auto status = tensorflow::ConvertTFExecutorToTFLOrFlatbuffer(
-      module.value().get(), output_mlir, toco_flags, pass_config, tags,
+      module.value().get(), output_mlir, converter_flags, pass_config, tags,
       /*saved_model_dir=*/"", bundle.get(), &result, serialize_stablehlo_ops);
   if (!status.ok()) {
     llvm::errs() << status.message() << '\n';

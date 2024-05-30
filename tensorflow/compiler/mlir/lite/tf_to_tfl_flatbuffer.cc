@@ -303,14 +303,15 @@ absl::Status ApplyDynamicRangeQuantizationFromOldQuantizer(
 absl::Status ConvertTFExecutorToStablehloFlatbuffer(
     mlir::PassManager& pass_manager, mlir::ModuleOp module, bool export_to_mlir,
     mlir::StatusScopedDiagnosticHandler& status_handler,
-    const toco::TocoFlags& toco_flags, const mlir::TFL::PassConfig& pass_config,
-    std::optional<Session*> session, std::string* result,
+    const tflite::ConverterFlags& converter_flags,
+    const mlir::TFL::PassConfig& pass_config, std::optional<Session*> session,
+    std::string* result,
     const std::unordered_set<std::string>& saved_model_tags) {
   // Currently, TF quantization only support dynamic range quant, as such
-  // when toco flag post training quantization is specified with converting to
-  // stablehlo, we automatically enable dynamic range quantization
+  // when converter flag post training quantization is specified with converting
+  // to stablehlo, we automatically enable dynamic range quantization
 
-  if (toco_flags.post_training_quantize()) {
+  if (converter_flags.post_training_quantize()) {
     const auto status = quantization::PreprocessAndFreezeGraph(
         module, module.getContext(), session);
     if (!status.ok()) {
@@ -320,7 +321,7 @@ absl::Status ConvertTFExecutorToStablehloFlatbuffer(
 
     // TODO: b/264218457 - Refactor the component below once StableHLO Quantizer
     // can run DRQ. Temporarily using TF Quantization for StableHLO DRQ.
-    if (!toco_flags.has_quantization_options()) {
+    if (!converter_flags.has_quantization_options()) {
       // The default minimum number of elements a weights array must have to be
       // quantized by this transformation.
       const int kWeightsMinNumElementsDefault = 1024;
@@ -347,9 +348,9 @@ absl::Status ConvertTFExecutorToStablehloFlatbuffer(
   pass_manager.addPass(mlir::odml::createPrintOpStatsPass(
       mlir::odml::GetAcceptedStableHLODialects()));
   mlir::odml::AddStablehloOptimizationPasses(pass_manager);
-  if (toco_flags.has_quantization_options()) {
+  if (converter_flags.has_quantization_options()) {
     stablehlo::quantization::AddQuantizationPasses(
-        pass_manager, toco_flags.quantization_options());
+        pass_manager, converter_flags.quantization_options());
   }
   if (failed(pass_manager.run(module))) {
     return status_handler.ConsumeStatus();
@@ -369,7 +370,7 @@ absl::Status ConvertTFExecutorToStablehloFlatbuffer(
   // Write MLIR Stablehlo dialect into FlatBuffer
   OpOrArgLocNameMapper op_or_arg_name_mapper;
   tflite::FlatbufferExportOptions options;
-  options.toco_flags = toco_flags;
+  options.converter_flags = converter_flags;
   options.saved_model_tags = saved_model_tags;
   options.op_or_arg_name_mapper = &op_or_arg_name_mapper;
   options.metadata[tflite::kModelUseStablehloTensorKey] = "true";
@@ -383,7 +384,8 @@ absl::Status ConvertTFExecutorToStablehloFlatbuffer(
 }
 
 absl::Status ConvertTFExecutorToTFLOrFlatbuffer(
-    mlir::ModuleOp module, bool export_to_mlir, toco::TocoFlags& toco_flags,
+    mlir::ModuleOp module, bool export_to_mlir,
+    tflite::ConverterFlags& converter_flags,
     const mlir::TFL::PassConfig& pass_config,
     const std::unordered_set<std::string>& saved_model_tags,
     llvm::StringRef saved_model_dir, SavedModelBundle* saved_model_bundle,
@@ -404,7 +406,7 @@ absl::Status ConvertTFExecutorToTFLOrFlatbuffer(
   if (mlir::failed(mlir::applyPassManagerCLOptions(pass_manager))) {
     return absl::InternalError("Failed to apply MLIR pass manager CL options.");
   }
-  InitPassManager(pass_manager, toco_flags.debug_options());
+  InitPassManager(pass_manager, converter_flags.debug_options());
 
   pass_manager.addInstrumentation(
       std::make_unique<mlir::TFL::ErrorCollectorInstrumentation>(
@@ -425,14 +427,14 @@ absl::Status ConvertTFExecutorToTFLOrFlatbuffer(
 
     // return to avoid adding TFL converter path
     return ConvertTFExecutorToStablehloFlatbuffer(
-        pass_manager, module, export_to_mlir, status_handler, toco_flags,
+        pass_manager, module, export_to_mlir, status_handler, converter_flags,
         pass_config, std::move(session_opt), result, saved_model_tags);
   }
 
   if (pass_config.enable_hlo_to_tf_conversion) {
     if (failed(RunHloToTfConversion(
             pass_config, saved_model_dir, saved_model_tags,
-            toco_flags.mutable_quantization_config(),
+            converter_flags.mutable_quantization_config(),
             quantization_py_function_lib, saved_model_bundle, pass_manager,
             status_handler, module))) {
       return status_handler.ConsumeStatus();
@@ -456,8 +458,8 @@ absl::Status ConvertTFExecutorToTFLOrFlatbuffer(
 
   pass_manager.clear();
 
-  AddPostVariableFreezingTFToTFLConversionPasses(saved_model_dir, toco_flags,
-                                                 pass_config, &pass_manager);
+  AddPostVariableFreezingTFToTFLConversionPasses(
+      saved_model_dir, converter_flags, pass_config, &pass_manager);
   if (failed(pass_manager.run(module))) {
     return status_handler.Combine(absl::InvalidArgumentError(
         "Variable constant folding is failed. Please consider using "
@@ -489,7 +491,7 @@ absl::Status ConvertTFExecutorToTFLOrFlatbuffer(
   OpOrArgLocNameMapper op_or_arg_name_mapper;
   tflite::FlatbufferExportOptions options;
   std::string translated_result;
-  options.toco_flags = toco_flags;
+  options.converter_flags = converter_flags;
   options.saved_model_tags = saved_model_tags;
   options.op_or_arg_name_mapper = &op_or_arg_name_mapper;
   if (quant_specs.support_mask !=
