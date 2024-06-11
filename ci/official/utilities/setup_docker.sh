@@ -37,8 +37,23 @@ if ! docker container inspect tf >/dev/null 2>&1 ; then
   # Pass all existing TFCI_ variables into the Docker container
   env_file=$(mktemp)
   env | grep ^TFCI_ > "$env_file"
-  docker run $TFCI_DOCKER_ARGS --name tf -w "$TFCI_GIT_DIR" -itd --rm \
-      -v "$TFCI_GIT_DIR:$TFCI_GIT_DIR" \
+  if [[ `uname -s | grep -P '^MSYS_NT'` ]]; then
+    # Docker on Windows doesn't understand Linux-like paths, so these are
+    # converted back to the actual Windows paths.
+    # Host dirs can also only be mapped to an existing drive inside the
+    # container, so T:\ is replaced with C:\.
+    TFCI_GIT_DIR_WIN=$(cygpath -m $TFCI_GIT_DIR)
+    TFCI_OUTPUT_DIR_WIN=`cygpath -m $TFCI_OUTPUT_DIR | sed -E 's|^[a-zA-Z]:|C:|g'`
+    sed -iE 's|^TFCI_OUTPUT_DIR=.*|TFCI_OUTPUT_DIR='"$TFCI_OUTPUT_DIR_WIN"'|g' $env_file
+    grep TFCI_OUTPUT_DIR $env_file
+    WORKING_DIR=`echo "$TFCI_GIT_DIR_WIN" | sed -E 's|^[a-zA-Z]:|C:|g'`
+    APPLICATION_CREDS=`echo "$GOOGLE_APPLICATION_CREDENTIALS" | sed -E 's|^[a-zA-Z]:|C:|g'`
+    echo "GOOGLE_APPLICATION_CREDENTIALS=$APPLICATION_CREDS" > "$env_file"
+    env_file=$(cygpath -w $env_file)
+  fi
+
+  docker run $TFCI_DOCKER_ARGS --name tf -w "$WORKING_DIR" -itd --rm \
+      -v "$TFCI_GIT_DIR_WIN:$WORKING_DIR" \
       --env-file "$env_file" \
       "$TFCI_DOCKER_IMAGE" \
     bash
