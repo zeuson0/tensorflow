@@ -203,12 +203,24 @@ class CostAnalysis {
           operands_in_alternate_mem = {},
       absl::Span<const ShapeIndex> outputs_in_alternate_mem = {}) const;
 
+  // Return bandwidth of the alternate memory.
+  float GetAlternateMemoryBandwidth() const {
+    return options_.alternate_mem_bandwidth_bytes_per_second;
+  }
   // Returns the bytes accessed from alternate memory.
   float GetBytesAccessedFromAlternateMemory(
       const HloInstruction& instruction,
       absl::Span<const std::pair<int64_t, ShapeIndex>>
           operands_in_alternate_mem = {},
       absl::Span<const ShapeIndex> outputs_in_alternate_mem = {}) const;
+  // Returns the bytes accessed from default memory.
+  float GetBytesAccessedFromDefaultMemory(
+      const HloInstruction& instruction,
+      absl::Span<const std::pair<int64_t, ShapeIndex>>
+          operands_in_alternate_mem,
+      absl::Span<const ShapeIndex> outputs_in_alternate_mem,
+      bool include_operand_access = true,
+      bool include_output_access = true) const;
 
   // Returns the elapsed time in seconds due to compute only.
   float GetInstructionElapsedDueToCompute(

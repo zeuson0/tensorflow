@@ -353,17 +353,28 @@ MemorySpaceAssignment::RunMemorySpaceAssignment(
     const HloAliasAnalysis& alias_analysis) {
   TF_RETURN_IF_ERROR(FindAllocationSequence(hlo_live_range, alias_analysis));
 
+  std::optional<RuntimeSimulator> runtime_simulator = std::nullopt;
   if (options_.cost_analysis) {
-    RuntimeSimulator runtime_simulator(options_.cost_analysis);
-    float estimated_time = runtime_simulator.ComputeEstimatedElapsedTime(
-        hlo_live_range, allocations_);
-    VLOG(1) << "Estimated elapsed time (sec): " << estimated_time;
+    runtime_simulator.emplace(options_.cost_analysis);
+    float estimated_time =
+        runtime_simulator->SimulateElapsedTimeWithoutAsyncCopies(hlo_live_range,
+                                                                 allocations_);
+    VLOG(1) << "Estimated elapsed time without async copies (sec): "
+            << estimated_time;
   }
 
   TF_RETURN_IF_ERROR(Process(hlo_live_range));
   ScheduleAsynchronousCopies();
   TF_RETURN_IF_ERROR(SimplifyGraph());
   TF_RETURN_IF_ERROR(FixSchedule());
+
+  if (runtime_simulator.has_value()) {
+    float estimated_time = runtime_simulator->SimulateElapsedTime(
+        module_, hlo_live_range, allocations_, options_.alternate_memory_space,
+        options_.cost_analysis->base_costs().BytesPerSecond());
+    VLOG(1) << "Estimated elapsed time with async copies (sec): "
+            << estimated_time;
+  }
   TF_RETURN_IF_ERROR(ExportAndColorBuffers());
 
   if (VLOG_IS_ON(3)) {

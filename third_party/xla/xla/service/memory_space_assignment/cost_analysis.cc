@@ -321,6 +321,49 @@ float CostAnalysis::GetDefaultMemoryBandwidthIdleTime(
   return elapsed - elapsed_due_to_default_mem;
 }
 
+float CostAnalysis::GetBytesAccessedFromDefaultMemory(
+    const HloInstruction& instruction,
+    absl::Span<const std::pair<int64_t, ShapeIndex>> operands_in_alternate_mem,
+    absl::Span<const ShapeIndex> outputs_in_alternate_mem,
+    bool include_operand_access, bool include_output_access) const {
+  float total_bytes_accessed = 0.0;
+  if (include_operand_access) {
+    // Get the total operand bytes accessed and subtract the operand bytes
+    // accessed from alternate memory.
+    float total_operand_bytes_accessed = 0.0;
+    for (int operand_num = 0; operand_num < instruction.operand_count();
+         ++operand_num) {
+      ShapeUtil::ForEachSubshape(
+          instruction.operand(operand_num)->shape(),
+          [&](const Shape& subshape, const ShapeIndex& index) {
+            total_operand_bytes_accessed += base_costs_.OperandBytesAccessed(
+                instruction, operand_num, index);
+          });
+    }
+    total_bytes_accessed += total_operand_bytes_accessed -
+                            GetBytesAccessedFromAlternateMemory(
+                                instruction, operands_in_alternate_mem,
+                                /*outputs_in_alternate_mem=*/{});
+  }
+  if (include_output_access) {
+    // Get the total output bytes accessed and subtract the output bytes
+    // accessed from alternate memory.
+    float total_output_bytes_accessed = 0.0;
+    ShapeUtil::ForEachSubshape(
+        instruction.shape(),
+        [&](const Shape& subshape, const ShapeIndex& index) {
+          total_output_bytes_accessed +=
+              base_costs_.OutputBytesAccessed(instruction, index);
+        });
+    total_bytes_accessed +=
+        total_output_bytes_accessed -
+        GetBytesAccessedFromAlternateMemory(instruction,
+                                            /*operands_in_alternate_mem=*/{},
+                                            outputs_in_alternate_mem);
+  }
+  return total_bytes_accessed;
+}
+
 float CostAnalysis::GetBytesAccessedFromAlternateMemory(
     const HloInstruction& instruction,
     absl::Span<const std::pair<int64_t, ShapeIndex>> operands_in_alternate_mem,
