@@ -36,6 +36,7 @@ limitations under the License.
 #include "absl/container/flat_hash_set.h"
 #include "absl/functional/any_invocable.h"
 #include "absl/log/check.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
@@ -45,8 +46,8 @@ limitations under the License.
 #include "xla/hlo/utils/hlo_live_range.h"
 #include "xla/map_util.h"
 #include "xla/service/heap_simulator/allocation_block.h"
+#include "xla/service/heap_simulator/loop_optimized_allocation.h"
 #include "xla/service/hlo_value.h"
-#include "xla/service/memory_space_assignment/repacking.h"
 #include "xla/service/time_utils.h"
 #include "xla/util.h"
 
@@ -71,6 +72,11 @@ HeapSimulator::Chunk HeapSimulator::Chunk::FromOffsetSize(int64_t offset,
 
 std::string HeapSimulator::Chunk::ToString() const {
   return absl::StrCat("[", offset, ",", chunk_end(), ")");
+}
+
+std::string BufferIntervalTreeNode::ToString() const {
+  return absl::StrCat("start: ", start, " end: ", end,
+                      " chunk: ", chunk.ToString());
 }
 
 bool HeapSimulator::Chunk::OverlapsWith(Chunk other_chunk) const {
@@ -848,6 +854,16 @@ bool BufferIntervalTree::Remove(int64_t start, int64_t end,
 std::vector<Chunk> BufferIntervalTree::ChunksOverlappingInTime(
     int64_t start, int64_t end) const {
   std::vector<Chunk> result;
+  for (const BufferIntervalTreeNode* node :
+       NodesOverlappingInTime(start, end)) {
+    result.push_back(node->chunk);
+  }
+  return result;
+}
+
+std::vector<const BufferIntervalTreeNode*>
+BufferIntervalTree::NodesOverlappingInTime(int64_t start, int64_t end) const {
+  std::vector<const BufferIntervalTreeNode*> result;
   if (root_ == nullptr) {
     return result;
   }
@@ -863,7 +879,7 @@ std::vector<Chunk> BufferIntervalTree::ChunksOverlappingInTime(
       visiting_stack.push_back(top->left);
     }
     if (top->start <= end && top->end >= start) {
-      result.push_back(top->chunk);
+      result.push_back(top);
     }
     if (end < top->start) {
       continue;
@@ -873,6 +889,93 @@ std::vector<Chunk> BufferIntervalTree::ChunksOverlappingInTime(
     }
   }
   return result;
+}
+
+std::pair<int64_t, int64_t> BufferIntervalTree::GetMemroyMapParameters(
+    std::vector<const BufferIntervalTreeNode*>& nodes) const {
+  CHECK(!nodes.empty());
+  int64_t min_chunk_offset = std::numeric_limits<int64_t>::max();
+  int64_t max_chunk_end = std::numeric_limits<int64_t>::min();
+  int64_t best_memory_block = nodes.front()->chunk.offset;
+  for (const BufferIntervalTreeNode* node : nodes) {
+    min_chunk_offset = std::min(min_chunk_offset, node->chunk.offset);
+    max_chunk_end = std::max(max_chunk_end, node->chunk.chunk_end());
+    best_memory_block = std::gcd(best_memory_block, node->chunk.offset);
+    best_memory_block = std::gcd(best_memory_block, node->chunk.chunk_end());
+  }
+  VLOG(3) << " min_chunk_offset: " << min_chunk_offset
+          << " max_chunk_end: " << max_chunk_end
+          << " best_memory_block: " << best_memory_block;
+  return {best_memory_block, max_chunk_end};
+}
+
+std::vector<std::vector<bool>> BufferIntervalTree::GetMemoryMap(
+    int64_t start, int64_t end, int64_t best_memory_block, int64_t n, int64_t m,
+    std::vector<const BufferIntervalTreeNode*>& nodes) const {
+  std::vector<std::vector<bool>> memory_map(n, std::vector<bool>(m, false));
+  for (const BufferIntervalTreeNode* node : nodes) {
+    for (int64_t i = node->chunk.offset / best_memory_block;
+         i < node->chunk.chunk_end() / best_memory_block; ++i) {
+      for (int64_t j = std::max(node->start - start, 0L);
+           j <= std::min(node->end - start, end - start); ++j) {
+        memory_map[i][j] = true;
+      }
+    }
+  }
+  return memory_map;
+}
+
+std::string BufferIntervalTree::MemoryMapToString(
+    int64_t start, int64_t end, int64_t best_memory_block, int64_t group_size,
+    int64_t n, int64_t m, std::vector<std::vector<bool>>& memory_map) const {
+  std::string output = "\n";
+  absl::StrAppend(&output, "Memory map for time: [", start, ",", end,
+                  "], best_memory_block: ", best_memory_block,
+                  ", group_size: ", group_size, "\n\n");
+  for (int64_t i = n - 1; i >= 0; --i) {
+    for (int64_t j = 0; j < m; ++j) {
+      if (group_size && j % group_size == 0) {
+        absl::StrAppend(&output, " ");
+      }
+      absl::StrAppend(&output, memory_map[i][j] ? "#" : ".");
+    }
+    absl::StrAppend(&output, " ", std::to_string((i + 1) * best_memory_block),
+                    "\n");
+  }
+  for (int64_t j = start; j <= end; ++j) {
+    if (group_size && j % group_size == 0) {
+      absl::StrAppend(&output, " ");
+    }
+    absl::StrAppend(&output, std::to_string(j % 10));
+  }
+  absl::StrAppend(&output, "\n\n");
+  return output;
+}
+
+std::string BufferIntervalTree::NodesOverlappingInTimeToAsciiArt(
+    int64_t start, int64_t end, int64_t group_size) const {
+  std::vector<const BufferIntervalTreeNode*> nodes =
+      NodesOverlappingInTime(start, end);
+  if (nodes.empty()) {
+    return "No nodes overlapping in time. Memory is free!";
+  }
+  auto [best_memory_block, max_chunk_end] = GetMemroyMapParameters(nodes);
+  int64_t n = max_chunk_end / best_memory_block;
+  int64_t m = end - start + 1;
+  if (n > 100 || m > 100) {
+    std::string output = "\n";
+    absl::StrAppend(
+        &output,
+        "Cannot print memory usage to ASCII art. Printing nodes instead!\n\n");
+    for (const BufferIntervalTreeNode* node : nodes) {
+      absl::StrAppend(&output, node->ToString(), "\n");
+    }
+    return output;
+  }
+  std::vector<std::vector<bool>> memory_map =
+      GetMemoryMap(start, end, best_memory_block, n, m, nodes);
+  return MemoryMapToString(start, end, best_memory_block, group_size, n, m,
+                           memory_map);
 }
 
 template <typename BufferType>
@@ -2418,6 +2521,6 @@ ChooseBestHeapAlgorithm<BufferType>::Finish() {
 
 template class GlobalDecreasingSizeBestFitHeap<HloValue>;
 template class GlobalDecreasingSizeBestFitHeap<AllocationBlock>;
+template class GlobalDecreasingSizeBestFitHeap<LoopOptimizerAllocation>;
 template class ChooseBestHeapAlgorithm<HloValue>;
-
 }  // namespace xla

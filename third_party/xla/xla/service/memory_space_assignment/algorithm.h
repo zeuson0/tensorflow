@@ -499,6 +499,7 @@ class MsaAlgorithm : public GlobalDecreasingSizeBestFitHeap<HloValue> {
     int64_t loop_size;
     // A pointer into an Allocation in loop_optimized_allocations_.
     const Allocation* loop_optimized_allocation;
+    std::unique_ptr<AliasedOffset> preferred_offset;
   };
 
   // A context object that is used to share state amongst the methods that

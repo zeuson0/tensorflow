@@ -37,32 +37,35 @@ cc_library(
     hdrs = ["heap_simulator.h"],
     deps = [
         ":allocation_block",
+        ":loop_optimized_allocation",
         "//xla:comparison_util",
         "//xla:util",
         "//xla/hlo/ir:hlo",
         "//xla/hlo/utils:hlo_live_range",
         "//xla/service:buffer_value",
-        "//xla/service:buffer_value_containers",
         "//xla/service:hlo_alias_analysis",
-        "//xla/service:hlo_buffer",
-        "//xla/service:hlo_dataflow_analysis",
-        "//xla/service:hlo_ordering",
         "//xla/service:hlo_proto_cc",
         "//xla/service:hlo_value",
+        "//xla/service:logical_buffer",
         "//xla/service:time_utils",
-        "//xla/service:tuple_points_to_analysis",
-        "//xla/service/memory_space_assignment:repacking",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/functional:any_invocable",
+        "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
     ],
+)
+
+cc_library(
+    name = "loop_optimized_allocation",
+    hdrs = ["loop_optimized_allocation.h"],
+    deps = ["@com_google_absl//absl/strings"],
 )
 
 xla_cc_test(

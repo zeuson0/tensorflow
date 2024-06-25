@@ -38,6 +38,7 @@ limitations under the License.
 #include "absl/container/flat_hash_set.h"
 #include "absl/functional/any_invocable.h"
 #include "absl/log/check.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -957,16 +958,8 @@ absl::Status MsaAlgorithm::OptimizeMemoryBoundLoop(int loop_start_idx,
           iteration_start_idx, iteration_end_idx, options_.max_size_in_bytes,
           options_.memory_bound_loop_optimizer_options, hlo_live_range_,
           alias_analysis_, *options_.cost_analysis, options_.size_fn,
-          options_.reserved_scoped_memory_fn));
+          options_.reserved_scoped_memory_fn, options_.alignment_in_bytes));
   optimizer->Optimize();
-
-  const int loop_optimized_allocations_original_size =
-      loop_optimized_allocations_.size();
-  for (MemoryBoundLoopOptimizer::LoopValue& value : optimizer->loop_values()) {
-    if (!value.allocations.empty() && value.IsAllocationTypeSupported()) {
-      loop_optimized_allocations_.push_back(std::move(value.allocations));
-    }
-  }
 
   // Check if this unrolled loop is in a while loop.
   const auto& instruction_sequence =
@@ -978,10 +971,12 @@ absl::Status MsaAlgorithm::OptimizeMemoryBoundLoop(int loop_start_idx,
 
   // Update the loop_optimized_allocations_map_ with the output of the
   // optimizer.
-  for (int i = loop_optimized_allocations_original_size;
-       i < loop_optimized_allocations_.size(); ++i) {
-    const AllocationSequence& sequence = loop_optimized_allocations_.at(i);
-    CHECK(!sequence.empty());
+  for (MemoryBoundLoopOptimizer::LoopValue& value : optimizer->loop_values()) {
+    if (value.allocations.empty() || !value.IsAllocationTypeSupported()) {
+      continue;
+    }
+    loop_optimized_allocations_.push_back(std::move(value.allocations));
+    const AllocationSequence& sequence = loop_optimized_allocations_.back();
     VLOG(3) << "  alloc: " << sequence.back()->ToString();
     for (const auto& allocation : sequence) {
       // Check if the loop is in a while loop and the position needs to be
@@ -1005,8 +1000,18 @@ absl::Status MsaAlgorithm::OptimizeMemoryBoundLoop(int loop_start_idx,
           CHECK_LT(use.operand_number, repeated_inst->operand_count());
           HloUse repeated_use{repeated_inst, use.operand_number,
                               use.operand_index};
-          loop_optimized_allocations_map_[repeated_use] = {use_idx, loop_size,
-                                                           allocation.get()};
+          if (value.HasEvenAndOddChunks()) {
+            auto [even_chunk, odd_chunk] = value.chunks;
+            int64_t iteration = (i - loop_start_idx - use_idx) / loop_size;
+            int64_t offset =
+                iteration % 2 == 0 ? even_chunk->offset : odd_chunk->offset;
+            loop_optimized_allocations_map_[repeated_use] = {
+                use_idx, loop_size, allocation.get(),
+                std::make_unique<AliasedOffset>(offset)};
+          } else {
+            loop_optimized_allocations_map_[repeated_use] = {use_idx, loop_size,
+                                                             allocation.get()};
+          }
           VLOG(3) << " Setting optimized allocations map. Use: "
                   << repeated_use.ToString() << " idx: " << use_idx
                   << " allocation: " << allocation->ToString();
@@ -1265,9 +1270,9 @@ void MsaAlgorithm::IdentifyAndOptimizeMemoryBoundLoops() {
 
     if (num_iterations >=
         options_.memory_bound_loop_optimizer_options.min_num_iterations()) {
-      VLOG(2) << "Found valid loop. Loop start: " << loop_start_idx
-              << " loop end: " << loop_end_idx
-              << " num iterations: " << num_iterations;
+      LOG(INFO) << "Found valid loop. Loop start: " << loop_start_idx
+                << " loop end: " << loop_end_idx
+                << " num iterations: " << num_iterations;
 
       TF_CHECK_OK(OptimizeMemoryBoundLoop(loop_start_idx, loop_end_idx,
                                           loop_size_candidate));
@@ -2047,12 +2052,20 @@ MsaAlgorithm::AllocationRequest MsaAlgorithm::CreateAllocationRequest(
       VLOG(3) << "Found optimized allocation for " << use.hlo_use.ToString()
               << " (loop idx: " << loop_optimized_allocation_info.use_index
               << "): " << allocation->ToString();
+      if (allocation->memory_space() == MemorySpace::kAlternate &&
+          loop_optimized_allocation_info.preferred_offset) {
+        LOG(INFO) << "Setting preferred offset: "
+                  << loop_optimized_allocation_info.preferred_offset->offset
+                  << " for " << use.hlo_use.ToString();
+        preferred_offset =
+            loop_optimized_allocation_info.preferred_offset.get();
+      }
       if (require_no_copy_alternate_mem_allocation) {
         if (allocation->is_copy_allocation() ||
             allocation->memory_space() == MemorySpace::kDefault) {
-          LOG(WARNING) << "Optimized allocation could not be applied "
-                          "because the tensor is pre-colored, allocation: "
-                       << allocation->ToString();
+          LOG(ERROR) << "Optimized allocation could not be applied "
+                        "because the tensor is pre-colored, allocation: "
+                     << allocation->ToString();
         }
       } else if (allocation->is_copy_allocation()) {
         allow_no_copy_alternate_mem_allocation = true;
@@ -3995,11 +4008,12 @@ MsaAlgorithm::Result MsaAlgorithm::AllocateInAlternateMemoryNoCopy(
   if (request.preferred_offset) {
     // If there is a preferred offset provided in the request and if it doesn't
     // match the previous allocation, this request cannot be satisified.
-    if (preferred_offset && request.preferred_offset != preferred_offset) {
-      VLOG(3) << "Cannot perform no-copy allocation due to mismatch: "
-                 "preferred_offset = "
-              << preferred_offset->offset << ", request.preferred_offset = "
-              << request.preferred_offset->offset;
+    if (preferred_offset &&
+        request.preferred_offset->offset != preferred_offset->offset) {
+      LOG(INFO) << "Cannot perform no-copy allocation due to mismatch: "
+                   "preferred_offset = "
+                << preferred_offset->offset << ", request.preferred_offset = "
+                << request.preferred_offset->offset;
       return Result::kFailConflictingPreferredOffsets;
     }
     preferred_offset = request.preferred_offset;

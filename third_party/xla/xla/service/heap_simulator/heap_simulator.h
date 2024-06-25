@@ -24,7 +24,6 @@ limitations under the License.
 #include <list>
 #include <memory>
 #include <optional>
-#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -43,16 +42,12 @@ limitations under the License.
 #include "xla/hlo/ir/hlo_schedule.h"
 #include "xla/hlo/utils/hlo_live_range.h"
 #include "xla/service/buffer_value.h"
-#include "xla/service/buffer_value_containers.h"
 #include "xla/service/heap_simulator/allocation_block.h"
+#include "xla/service/heap_simulator/loop_optimized_allocation.h"
 #include "xla/service/hlo.pb.h"
 #include "xla/service/hlo_alias_analysis.h"
-#include "xla/service/hlo_buffer.h"
-#include "xla/service/hlo_dataflow_analysis.h"
-#include "xla/service/hlo_ordering.h"
 #include "xla/service/hlo_value.h"
-#include "xla/service/memory_space_assignment/repacking.h"
-#include "xla/service/tuple_points_to_analysis.h"
+#include "xla/service/logical_buffer.h"
 
 namespace xla {
 
@@ -364,6 +359,8 @@ struct BufferIntervalTreeNode {
   BufferIntervalTreeNode* right;
   // parent
   BufferIntervalTreeNode* parent;
+
+  std::string ToString() const;
 };
 
 // An interval tree that can query buffers overlapping in time.
@@ -383,7 +380,40 @@ class BufferIntervalTree {
 
   BufferIntervalTreeNode* GetRoot() { return root_; }
 
+  // Returns a compact 2D view of memory usage over time.
+  // X axis is time, Y axis is memory.
+  // Say start = 18 and end = 22 and the output is:
+  //
+  // ##### 64   indicates memory block [48,64)
+  // #..## 48   indicates memory block [32,48)
+  // .###. 32   indicates memory block [16,32)
+  // ###.. 16   indicates memory block [0,16)
+  // 89012      indicates time 18, 19, ..., 22 (only last digit will be output)
+  //
+  // '#' indicates used and '.' indicates free memory.
+  //
+  // If group_size is specified, the output will be grouped by group_size in the
+  // time axis. There will be an extra space in the time axis after each group.
+  //
+  // Note: The memory beyond 64, the last memory block, is free.
+  std::string NodesOverlappingInTimeToAsciiArt(int64_t start, int64_t end,
+                                               int64_t group_size = 0) const;
+
  private:
+  std::pair<int64_t, int64_t> GetMemroyMapParameters(
+      std::vector<const BufferIntervalTreeNode*>& nodes) const;
+
+  std::vector<std::vector<bool>> GetMemoryMap(
+      int64_t start, int64_t end, int64_t best_memory_block, int64_t n,
+      int64_t m, std::vector<const BufferIntervalTreeNode*>& nodes) const;
+
+  std::string MemoryMapToString(
+      int64_t start, int64_t end, int64_t best_memory_block, int64_t group_size,
+      int64_t n, int64_t m, std::vector<std::vector<bool>>& memory_map) const;
+
+  std::vector<const BufferIntervalTreeNode*> NodesOverlappingInTime(
+      int64_t start, int64_t end) const;
+
   BufferIntervalTreeNode* root_ = nullptr;
   std::list<BufferIntervalTreeNode> node_storage_;
 };
@@ -1000,6 +1030,7 @@ class ChooseBestHeapAlgorithm : public HeapAlgorithm<BufferType> {
 
 extern template class GlobalDecreasingSizeBestFitHeap<HloValue>;
 extern template class GlobalDecreasingSizeBestFitHeap<AllocationBlock>;
+extern template class GlobalDecreasingSizeBestFitHeap<LoopOptimizerAllocation>;
 extern template class ChooseBestHeapAlgorithm<HloValue>;
 
 }  // namespace xla
