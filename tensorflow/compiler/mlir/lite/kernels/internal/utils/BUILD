@@ -1,4 +1,5 @@
 load("//tensorflow:tensorflow.default.bzl", "get_compatible_with_portable")
+load("//tensorflow/compiler/mlir/lite:build_def.bzl", "tflite_copts")
 
 package(
     # copybara:uncomment default_applicable_licenses = ["//tensorflow:license"],
@@ -8,18 +9,19 @@ package(
     licenses = ["notice"],
 )
 
-# LINT.IfChange(cc_library_padding)
+# LINT.IfChange(sparsity_format_converter)
+
 cc_library(
-    name = "padding",
-    srcs = [],
-    hdrs = ["padding.h"],
+    name = "sparsity_format_converter",
+    srcs = ["sparsity_format_converter.cc"],
+    hdrs = ["sparsity_format_converter.h"],
     compatible_with = get_compatible_with_portable(),
-    visibility = [
-        "//tensorflow/compiler/mlir/lite/kernels:__pkg__",
-        "//tensorflow/compiler/mlir/quantization/tensorflow/utils:__pkg__",
-    ],
+    copts = tflite_copts(),
     deps = [
         "//tensorflow/compiler/mlir/lite/core/c:tflite_common",
+        "@com_google_absl//absl/status",
+        "@eigen_archive//:eigen3",
     ],
 )
-# LINT.ThenChange(//tensorflow/lite/kernels/BUILD)
+
+# LINT.ThenChange(//tensorflow/lite/kernels/internal/utils/BUILD)

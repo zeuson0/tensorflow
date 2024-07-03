@@ -11,9 +11,12 @@ package(
 
 # LINT.IfChange(common)
 cc_library(
-    name = "common",
+    name = "tflite_common",
     srcs = [],
-    hdrs = ["builtin_op_data.h"],
+    hdrs = [
+        "builtin_op_data.h",
+        "dimension_type.h",
+    ],
     compatible_with = get_compatible_with_portable(),
     copts = tflite_copts(),
     visibility = [
@@ -29,8 +32,8 @@ cc_library(
 # used by "tflite_custom_c_library" and "tflite_flex_cc_library".
 # Do not use this target directly and don't consider it as a part of the public API.
 alias(
-    name = "private_common",
-    actual = ":common",
+    name = "tflite_private_common",
+    actual = ":tflite_common",
     tags = ["avoid_dep"],
     visibility = [
         "//visibility:public",
