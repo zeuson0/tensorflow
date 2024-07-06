@@ -326,6 +326,20 @@ void AddPostVariableFreezingTFToTFLConversionPasses(
     llvm::StringRef saved_model_dir, const toco::TocoFlags& toco_flags,
     const mlir::TFL::PassConfig& pass_config,
     mlir::OpPassManager* pass_manager) {
+  // This pass does resource analysis of saved model global tensors and marks
+  // those deemed read-only as immutable.
+  pass_manager->addPass(
+      mlir::tf_saved_model::CreateOptimizeGlobalTensorsPass());
+
+  if (!pass_config.disable_variable_freezing) {
+    // This pass 'freezes' immutable global tensors and inlines them as tf
+    // constant ops.
+    pass_manager->addPass(mlir::tf_saved_model::CreateFreezeGlobalTensorsPass(
+        /*allow_mutable_tensors=*/true));
+  }
+
+  pass_manager->addPass(mlir::TFL::CreateUnfreezeMutableGlobalTensorsPass());
+
   // Note:
   // We need to fuse composite ops before LowerStaticTensorList pass.
   // The tensorflow list is not supported right now by that pass.
@@ -353,11 +367,6 @@ void AddPostVariableFreezingTFToTFLConversionPasses(
         /*enable_dynamic_update_slice=*/
         toco_flags.enable_dynamic_update_slice()));
   }
-
-  // This pass does resource analysis of saved model global tensors and marks
-  // those deemed read-only as immutable.
-  pass_manager->addPass(
-      mlir::tf_saved_model::CreateOptimizeGlobalTensorsPass());
 
   if (pass_config.shape_inference) {
     // Add a shape inference pass to optimize away the unnecessary casts.
@@ -390,13 +399,6 @@ void AddPostVariableFreezingTFToTFLConversionPasses(
   pass_manager->addNestedPass<mlir::func::FuncOp>(mlir::createCSEPass());
   // This pass does dead code elimination based on symbol visibility.
   pass_manager->addPass(mlir::createSymbolDCEPass());
-
-  if (!pass_config.disable_variable_freezing) {
-    // This pass 'freezes' immutable global tensors and inlines them as tf
-    // constant ops.
-    pass_manager->addPass(mlir::tf_saved_model::CreateFreezeGlobalTensorsPass(
-        /*allow_mutable_tensors=*/pass_config.enable_tflite_variables));
-  }
 
   if (!saved_model_dir.empty()) {
     // This pass 'freezes' tf saved model asset ops and inlines as string values
