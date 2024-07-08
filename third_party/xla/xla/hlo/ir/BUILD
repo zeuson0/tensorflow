@@ -217,3 +217,26 @@ cc_library(
         "@com_google_absl//absl/types:span",
     ],
 )
+
+cc_library(
+    name = "collective_device_list",
+    srcs = ["collective_device_list.cc"],
+    hdrs = ["collective_device_list.h"],
+    deps = [
+        ":tile_assignment",
+        "//xla:util",
+        "//xla:xla_data_proto_cc",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+cc_test(
+    name = "collective_device_list_test",
+    srcs = ["collective_device_list_test.cc"],
+    deps = [
+        ":collective_device_list",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
