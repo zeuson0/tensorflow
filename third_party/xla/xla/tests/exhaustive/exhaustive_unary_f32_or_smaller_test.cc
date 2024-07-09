@@ -23,7 +23,6 @@ limitations under the License.
 #include <cstdlib>
 #include <limits>
 #include <string>
-#include <tuple>
 #include <type_traits>
 #include <utility>
 
@@ -669,12 +668,12 @@ UNARY_TEST_FLOAT_32_BITS_OR_LESS(Reciprocal, {
   if (IsTpu(platform_)) {
     error_spec_gen = +[](NativeT val) {
       auto abs_err = reciprocal_abs_error(val);
-      if constexpr (std::is_same<NativeT, xla::bfloat16>()) {
+      if constexpr (std::is_same_v<NativeT, xla::bfloat16>) {
         return ErrorSpec{.abs_err = abs_err, .rel_err = 0.0};
-      } else if constexpr (std::is_same<NativeT, xla::half>()) {
+      } else if constexpr (std::is_same_v<NativeT, xla::half>) {
         // N.B.: Does not require absolute error.
         return ErrorSpec{.abs_err = 0.0, .rel_err = 0.0};
-      } else if constexpr (std::is_same<NativeT, float>()) {
+      } else if constexpr (std::is_same_v<NativeT, float>) {
         NativeT eps = std::numeric_limits<NativeT>::epsilon();
         return ErrorSpec{.abs_err = abs_err, .rel_err = eps};
       }
@@ -683,12 +682,12 @@ UNARY_TEST_FLOAT_32_BITS_OR_LESS(Reciprocal, {
   if (IsPreV6Tpu(platform_)) {
     error_spec_gen = +[](NativeT val) {
       auto abs_err = reciprocal_abs_error(val);
-      if constexpr (std::is_same<NativeT, xla::bfloat16>()) {
+      if constexpr (std::is_same_v<NativeT, xla::bfloat16>) {
         return ErrorSpec{.abs_err = abs_err, .rel_err = 0.0};
-      } else if constexpr (std::is_same<NativeT, xla::half>()) {
+      } else if constexpr (std::is_same_v<NativeT, xla::half>) {
         // N.B.: Does not require absolute error.
         return ErrorSpec{.abs_err = 0.0, .rel_err = 0.0};
-      } else if constexpr (std::is_same<NativeT, float>()) {
+      } else if constexpr (std::is_same_v<NativeT, float>) {
         NativeT eps = std::numeric_limits<NativeT>::epsilon();
         return ErrorSpec{.abs_err = abs_err, .rel_err = 34 * eps};
       }
@@ -697,12 +696,12 @@ UNARY_TEST_FLOAT_32_BITS_OR_LESS(Reciprocal, {
   if (IsPreV5Tpu(platform_)) {
     error_spec_gen = +[](NativeT val) {
       auto abs_err = reciprocal_abs_error(val);
-      if constexpr (std::is_same<NativeT, xla::bfloat16>()) {
+      if constexpr (std::is_same_v<NativeT, xla::bfloat16>) {
         return ErrorSpec{.abs_err = abs_err, .rel_err = 0.0};
-      } else if constexpr (std::is_same<NativeT, xla::half>()) {
+      } else if constexpr (std::is_same_v<NativeT, xla::half>) {
         // N.B.: Does not require absolute error.
         return ErrorSpec{.abs_err = 0.0, .rel_err = 0.0};
-      } else if constexpr (std::is_same<NativeT, float>()) {
+      } else if constexpr (std::is_same_v<NativeT, float>) {
         NativeT eps = std::numeric_limits<NativeT>::epsilon();
         return ErrorSpec{.abs_err = abs_err, .rel_err = 136 * eps};
       }
