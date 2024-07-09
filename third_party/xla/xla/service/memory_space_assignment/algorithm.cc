@@ -1395,12 +1395,6 @@ absl::StatusOr<HeapSimulator::Result<HloValue>> MsaAlgorithm::Finish() {
       continue;
     }
 
-    if (interval.size > available_heap_size()) {
-      VLOG(3) << "Skip " << interval.buffer->ToShortString()
-              << " because the buffer is larger than the heap size.";
-      continue;
-    }
-
     auto colocated_intervals = GetSortedColocatedIntervals(interval);
 
     if (AreIntervalsReservedInAlternateMemory(colocated_intervals)) {
@@ -1869,6 +1863,12 @@ absl::StatusOr<MsaAlgorithm::Result> MsaAlgorithm::AllocateAllocationValues(
             options_.alternate_memory_space;
     VLOG(3) << "require_no_copy_alternate_mem_allocation = "
             << require_no_copy_alternate_mem_allocation;
+    if (require_no_copy_alternate_mem_allocation &&
+        allocation_value.size() > available_heap_size()) {
+      VLOG(3) << "Skip " << allocation_value.value()->ToShortString()
+              << " because the buffer is larger than the heap size.";
+      continue;
+    }
     if (!options_.is_position_allowed_in_alternate_mem_fn(
             allocation_value.defining_position())) {
       if (require_no_copy_alternate_mem_allocation) {
@@ -2615,8 +2615,12 @@ void MsaAlgorithm::CreateOrAddToAliasedOffset(
     const AllocationSequence& allocations, int64_t time) {
   for (auto allocation_it = allocations.rbegin();
        allocation_it != allocations.rend(); ++allocation_it) {
+    // The use case of GetLiveAllocationAt is to find the allocation that
+    // corresponds to the full buffer. Window prefetched allocations allocates
+    // only partial buffers, so we want to skip them.
     if ((*allocation_it)->start_time() <= time &&
-        (*allocation_it)->end_time() >= time) {
+        (*allocation_it)->end_time() >= time &&
+        !(*allocation_it)->is_window_prefetched_allocation()) {
       return allocation_it->get();
     }
   }
@@ -3728,6 +3732,7 @@ MsaAlgorithm::Result MsaAlgorithm::AllocateSegment(
         << "Not trying to prefetch because use requires buffer in default mem.";
     (*prev_allocation_in_default_mem_it)->set_end_time(request.end_time);
     (*prev_allocation_in_default_mem_it)->AddUse(request.use->hlo_use);
+    WindowPrefetch(request, **prev_allocation_in_default_mem_it);
     return Result::kSuccess;
   }
 
@@ -3794,7 +3799,24 @@ MsaAlgorithm::Result MsaAlgorithm::AllocateSegment(
   // default memory.
   (*prev_allocation_in_default_mem_it)->set_end_time(request.end_time);
   (*prev_allocation_in_default_mem_it)->AddUse(request.use->hlo_use);
+  WindowPrefetch(request, **prev_allocation_in_default_mem_it);
   return allocation_result;
+}
+
+void MsaAlgorithm::AddAsyncCopyForWindowPrefetch(
+    Allocation& prev_allocation, HloUse prev_use, std::optional<Chunk> chunk,
+    int64_t exclusive_start_time, int64_t end_time,
+    int64_t prefetch_done_schedule_before_time, AllocationSequence* allocations,
+    AliasedOffset* aliased_offset, float resource,
+    const WindowPrefetchedAllocation::Options& options) {
+  allocations->push_back(std::make_unique<WindowPrefetchedAllocation>(
+      prev_allocation, prev_use, chunk, exclusive_start_time,
+      prefetch_done_schedule_before_time, end_time, options));
+
+  RegisterAsyncCopy(MemorySpace::kAlternate, exclusive_start_time,
+                    prefetch_done_schedule_before_time, allocations,
+                    aliased_offset, resource,
+                    /*cross_program_prefetch_index=*/std::nullopt);
 }
 
 void MsaAlgorithm::AddAsyncCopy(
@@ -3814,6 +3836,16 @@ void MsaAlgorithm::AddAsyncCopy(
       prev_allocation, memory_space, chunk, exclusive_start_time,
       copy_done_schedule_before_time, end_time, cross_program_prefetch_index));
 
+  RegisterAsyncCopy(memory_space, exclusive_start_time,
+                    copy_done_schedule_before_time, allocations, aliased_offset,
+                    resource, cross_program_prefetch_index);
+}
+
+void MsaAlgorithm::RegisterAsyncCopy(
+    MemorySpace memory_space, int64_t exclusive_start_time,
+    int64_t copy_done_schedule_before_time, AllocationSequence* allocations,
+    AliasedOffset* aliased_offset, float resource,
+    std::optional<int> cross_program_prefetch_index) {
   // Register the additional async copy with the interval tree to keep track of
   // the limit at any given time.
   pending_async_copies_.push_back({exclusive_start_time,
@@ -3953,7 +3985,8 @@ MsaAlgorithm::Result MsaAlgorithm::AllocateInAlternateMemoryNoCopy(
     prev_allocation =
         request.allocation_value->allocation_sequence()->back().get();
     can_eliminate_copy =
-        (prev_allocation->memory_space() == MemorySpace::kAlternate);
+        (prev_allocation->memory_space() == MemorySpace::kAlternate &&
+         !prev_allocation->is_window_prefetched_allocation());
   }
 
   if (!can_eliminate_copy) {
@@ -4226,9 +4259,42 @@ std::string DescribeSlicedBufferMove(
 
 }  // namespace
 
-MsaAlgorithm::Result MsaAlgorithm::Prefetch(
+MsaAlgorithm::Result MsaAlgorithm::WindowPrefetch(
     const AllocationRequest& request,
     Allocation& prev_allocation_in_default_mem) {
+  const HloUse use = request.use->hlo_use;
+  VLOG(5) << "Considering window prefetch for use=" << use.ToString();
+
+  // Get the window prefetch details for this use.
+  WindowPrefetchDetail details =
+      options_.window_prefetch_detail_fn(use.instruction);
+  for (const auto& window : details.windows()) {
+    if (window.operand() != use.operand_number) {
+      continue;
+    }
+
+    const WindowPrefetchedAllocation::Options options = {
+        .bytes = window.size(),
+        .uid = window.uid(),
+        .alternate_memory_space = options_.alternate_memory_space,
+        .notify_operand_appended_fn = options_.notify_operand_appended_fn,
+    };
+    AllocationRequest window_prefetch_request = request;
+    window_prefetch_request.window_prefetch_options = &options;
+    window_prefetch_request.size = window.size();
+    const Shape shape = ShapeUtil::MakeShape(U8, {window.size()});
+    if (Result result = Prefetch(window_prefetch_request,
+                                 prev_allocation_in_default_mem, &shape);
+        result != Result::kSuccess) {
+      continue;
+    }
+  }
+  return Result::kSuccess;
+}
+
+MsaAlgorithm::Result MsaAlgorithm::Prefetch(
+    const AllocationRequest& request,
+    Allocation& prev_allocation_in_default_mem, const Shape* shape) {
   // Try partially placing the buffer in the alternate space. The time that is
   // overlapped will be used to asynchronously copy the buffer from the
   // default memory to the alternate memory.
@@ -4251,6 +4317,8 @@ MsaAlgorithm::Result MsaAlgorithm::Prefetch(
   PrefetchContext context;
   context.request = &request;
   context.prev_allocation_in_default_mem = &prev_allocation_in_default_mem;
+  // If the request has window prefetch options, it is a window prefetch.
+  context.window_prefetch = request.window_prefetch_options != nullptr;
 
   // Create a SliceProposal and WorkingIntervals.
   SetupPrefetchWorkingIntervalsAndSliceProposal(context);
@@ -4265,8 +4333,13 @@ MsaAlgorithm::Result MsaAlgorithm::Prefetch(
     return check_result;
   }
   const HloUse& use = request.use->hlo_use;
-  context.full_shape = &ShapeUtil::GetSubshape(
-      use.instruction->operand(use.operand_number)->shape(), use.operand_index);
+  if (shape != nullptr) {
+    context.full_shape = shape;
+  } else {
+    context.full_shape = &ShapeUtil::GetSubshape(
+        use.instruction->operand(use.operand_number)->shape(),
+        use.operand_index);
+  }
   // While uses might be allowed to have additional outstanding prefetches.
   context.extra_async_copy_limit =
       use.instruction->opcode() == HloOpcode::kWhile
@@ -4357,14 +4430,26 @@ MsaAlgorithm::Result MsaAlgorithm::Prefetch(
             << context.unsliced_solution->prefetch_picker_debug_string;
     AddToPendingChunks(context.unsliced_solution_intervals.full,
                        context.unsliced_solution->chunk_candidate);
-    AddAsyncCopy(
-        *context.prev_allocation_in_default_mem, MemorySpace::kAlternate,
-        context.unsliced_solution->chunk_candidate,
-        context.unsliced_solution_intervals.full.start - 1,
-        context.request->end_time, context.prefetch_end_time,
-        context.request->allocation_value->mutable_allocation_sequence(),
-        context.request->preferred_offset,
-        context.unsliced_solution->prefetch_resource);
+    if (context.window_prefetch) {
+      AddAsyncCopyForWindowPrefetch(
+          *context.prev_allocation_in_default_mem, request.use->hlo_use,
+          context.unsliced_solution->chunk_candidate,
+          context.unsliced_solution_intervals.full.start - 1,
+          context.request->end_time, context.prefetch_end_time,
+          context.request->allocation_value->mutable_allocation_sequence(),
+          context.request->preferred_offset,
+          context.unsliced_solution->prefetch_resource,
+          *context.request->window_prefetch_options);
+    } else {
+      AddAsyncCopy(
+          *context.prev_allocation_in_default_mem, MemorySpace::kAlternate,
+          context.unsliced_solution->chunk_candidate,
+          context.unsliced_solution_intervals.full.start - 1,
+          context.request->end_time, context.prefetch_end_time,
+          context.request->allocation_value->mutable_allocation_sequence(),
+          context.request->preferred_offset,
+          context.unsliced_solution->prefetch_resource);
+    }
 
     request.allocation_value->allocation_sequence()->back()->AddUse(
         request.use->hlo_use);
@@ -4437,7 +4522,9 @@ void MsaAlgorithm::SetupPrefetchWorkingIntervalsAndSliceProposal(
       context.sliced_solution_intervals.full;
 
   // Attempt to generate a slice proposal.
-  GenerateSliceProposal(context);
+  if (!context.window_prefetch) {
+    GenerateSliceProposal(context);
+  }
 
   // Setup the full SlicedBufferIntervals for the sliced and unsliced solutions.
   // If there is no slice proposal, we will not try a sliced solution. In such a

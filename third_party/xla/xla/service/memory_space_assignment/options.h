@@ -30,7 +30,6 @@ limitations under the License.
 #include "absl/types/span.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/service/buffer_value.h"
-#include "xla/service/heap_simulator/heap_simulator.h"
 #include "xla/service/hlo_value.h"
 #include "xla/service/memory_space_assignment/buffer_interval_comparator.h"
 #include "xla/service/memory_space_assignment/cost_analysis.h"
@@ -57,6 +56,10 @@ using ReservedScopedMemoryFunction = std::function<int64_t(
     const absl::flat_hash_set<ShapeIndex>& /*outputs_in_alternate_memory*/)>;
 using PositionRequiresContiguousAllocationFunction =
     std::function<bool(const HloPosition&)>;
+using WindowPrefetchDetailFunction =
+    std::function<WindowPrefetchDetail(const HloInstruction*)>;
+using WindowPrefetchNotifyOperandAppendedFunction =
+    std::function<void(HloInstruction*, int64_t, int64_t)>;
 
 // The different options to be passed to the Run() API.
 struct Options {
@@ -110,6 +113,15 @@ struct Options {
   PositionRequiresContiguousAllocationFunction
       position_requires_contiguous_allocation_fn =
           [](const HloPosition&) { return false; };
+
+  // This function is called to get details about window prefetches.
+  WindowPrefetchDetailFunction window_prefetch_detail_fn =
+      [](const HloInstruction*) { return WindowPrefetchDetail(); };
+
+  // This function is called to notify that an operand has been appended as a
+  // window prefetch buffer.
+  WindowPrefetchNotifyOperandAppendedFunction notify_operand_appended_fn =
+      [](HloInstruction*, int64_t, int64_t) {};
 
   // If true, we will try to reduce scoped allocation buffer size for all
   // instructions if their operand/output has been allocated in alternate

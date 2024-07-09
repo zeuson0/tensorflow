@@ -8249,6 +8249,48 @@ TEST_P(MemorySpaceAssignmentTest, HoistCopyStart) {
   }
 }
 
+TEST_P(MemorySpaceAssignmentTest, WindowPrefetch) {
+  absl::string_view hlo_string = R"(
+HloModule module, is_scheduled=true
+
+%fused_computation {
+  %p0 = bf16[64,8]{1,0:T(8,128)(2,1)} parameter(0)
+  %p1 = bf16[64,8]{1,0:T(8,128)(2,1)} parameter(1)
+  ROOT %add = bf16[64,8]{1,0:T(8,128)(2,1)} add(%p0, %p1)
+}
+
+entry {
+  %p0 = bf16[64,8]{1,0:T(8,128)(2,1)} parameter(0)
+  %p1 = bf16[64,8]{1,0:T(8,128)(2,1)} parameter(1)
+  ROOT fusion = bf16[64,8]{1,0:T(8,128)(2,1)} fusion(bf16[64,8]{1,0:T(8,128)(2,1)} %p0, bf16[64,8]{1,0:T(8,128)(2,1)} %p1), kind=kLoop, calls=%fused_computation
+}
+
+)";
+  TF_ASSERT_OK_AND_ASSIGN(auto module,
+                          ParseAndReturnVerifiedModule(hlo_string));
+
+  auto window_prefetch_detail_fn = [&](const HloInstruction* instruction) {
+    WindowPrefetchDetail window_prefetch_detail;
+    const HloInstruction* fusion = FindInstruction(module.get(), "fusion");
+    if (instruction == fusion) {
+      for (int i = 0; i < 2; ++i) {
+        auto* operand = window_prefetch_detail.add_windows();
+        operand->set_operand(i);
+        operand->set_size(32);
+      }
+    }
+    return window_prefetch_detail;
+  };
+
+  Options options = DefaultMemorySpaceOptions();
+  options.window_prefetch_detail_fn = window_prefetch_detail_fn;
+  AssignMemorySpace(module.get(), options, /*max_prefetch_interval=*/10,
+                    /*min_prefetch_interval=*/0);
+  const HloInstruction* fusion = FindInstruction(module.get(), "fusion");
+  EXPECT_EQ(fusion->operand_count(), 3);
+  VLOG(2) << "module: " << module->ToString();
+}
+
 INSTANTIATE_TEST_SUITE_P(MemorySpaceAssignmentInstantiation,
                          MemorySpaceAssignmentTest,
                          ::testing::Values(false, true));
