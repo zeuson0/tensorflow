@@ -792,11 +792,11 @@ Status Exporter::Convert(mlir::ModuleOp module,
 
 }  // namespace
 
-Status ConvertMlirToGraph(mlir::ModuleOp module,
-                          const GraphExportConfig& configs,
-                          std::unique_ptr<Graph>* graph,
-                          FunctionLibraryDefinition* flib_def,
-                          absl::flat_hash_set<Node*>* control_ret_nodes) {
+Status ConvertMlirToTfExecutor(mlir::ModuleOp module,
+                               const GraphExportConfig& configs,
+                               std::unique_ptr<Graph>* graph,
+                               FunctionLibraryDefinition* flib_def,
+                               absl::flat_hash_set<Node*>* control_ret_nodes) {
   mlir::StatusScopedDiagnosticHandler sh(module.getContext());
   if (failed(VerifyExportSuitable(module))) return sh.ConsumeStatus();
   return sh.Combine(
@@ -808,8 +808,8 @@ Status ConvertMlirToGraph(mlir::ModuleOp module,
                           std::unique_ptr<Graph>* graph,
                           FunctionLibraryDefinition* flib_def) {
   absl::flat_hash_set<Node*> control_ret_nodes;
-  return ConvertMlirToGraph(module, configs, graph, flib_def,
-                            &control_ret_nodes);
+  return ConvertMlirToTfExecutor(module, configs, graph, flib_def,
+                                 &control_ret_nodes);
 }
 
 absl::StatusOr<std::unique_ptr<GraphDef>> ConvertMlirToGraphdef(
