@@ -39,6 +39,7 @@ limitations under the License.
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_instructions.h"
 #include "xla/primitive_util.h"
+#include "xla/service/gpu/fusions/loop.h"
 #include "xla/service/gpu/fusions/mlir/computation_partitioner.h"
 #include "xla/service/gpu/fusions/mlir/elemental_hlo_to_mlir.h"
 #include "xla/service/gpu/fusions/mlir/ir/xla_gpu_ops.h"
@@ -69,6 +70,13 @@ using mlir_converter::PartitionedComputations;
 using mlir_converter::ProvideParameter;
 
 }  // namespace
+
+MlirScatterFusion::MlirScatterFusion(const HloFusionAnalysis& analysis)
+    : analysis_(analysis) {
+  const auto& scatter = analysis_.fusion_hero(0).instruction();
+  auto& scatter_update_shape = scatter.operands().back()->shape();
+  config_ = ComputeLoopFusionConfig(analysis, scatter_update_shape);
+}
 
 bool MlirScatterFusion::IsSupported(const HloFusionAnalysis& analysis) {
   const auto* scatter =
@@ -134,8 +142,9 @@ std::optional<IndexingMap> MlirScatterFusion::ComputeThreadIdToInputIndexing(
 LaunchDimensions MlirScatterFusion::launch_dimensions() const {
   const auto& scatter = analysis_.fusion_hero(0).instruction();
   // Compute thread id mapping based on the shape of update operand.
-  auto& shape = scatter.operands().back()->shape();
-  return CalculateLaunchDimensions(shape, analysis_.device_info());
+  auto& scatter_update_shape = scatter.operands().back()->shape();
+  return CalculateLaunchDimensions(scatter_update_shape,
+                                   analysis_.device_info());
 }
 
 std::vector<mlir_converter::EpilogueSpecification>
