@@ -364,7 +364,7 @@ cc_library(
     compatible_with = get_compatible_with_portable(),
     deps = [
         ":platform",
-        "@com_google_benchmark//:benchmark",
+        "//third_party/benchmark",
     ],
 )
 
@@ -975,7 +975,7 @@ cc_library(
     deps = [
         ":mutex",
         ":types",
-        "@eigen_archive//:eigen3",
+        "//third_party/eigen3",
     ],
 )
 
@@ -1017,7 +1017,7 @@ cc_library(
     compatible_with = get_compatible_with_portable(),
     deps = [
         ":byte_order",
-        "@eigen_archive//:eigen3",
+        "//third_party/eigen3",
     ],
 )
 
@@ -1026,8 +1026,8 @@ cc_library(
     hdrs = ["ml_dtypes.h"],
     compatible_with = get_compatible_with_portable(),
     deps = [
-        "@ml_dtypes//:float8",
-        "@ml_dtypes//:intn",
+        "//third_party/py/ml_dtypes:float8",
+        "//third_party/py/ml_dtypes:intn",
     ],
 )
 

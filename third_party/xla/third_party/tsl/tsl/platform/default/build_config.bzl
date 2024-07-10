@@ -714,8 +714,8 @@ def tf_additional_lib_deps():
         "@com_google_absl//absl/container:inlined_vector",
         "@com_google_absl//absl/types:span",
     ] + if_static(
-        [clean_dep("@nsync//:nsync_cpp")],
-        [clean_dep("@nsync//:nsync_headers")],
+        [clean_dep("//third_party/nsync:nsync_cpp")],
+        [clean_dep("//third_party/nsync:nsync_headers")],
     )
 
 def tf_additional_core_deps():
@@ -731,7 +731,7 @@ def tf_additional_core_deps():
 def tf_lib_proto_parsing_deps():
     return [
         ":protos_all_cc",
-        clean_dep("@eigen_archive//:eigen3"),
+        clean_dep("//third_party/eigen3"),
         clean_dep("//tsl/protobuf:protos_all_cc"),
     ]
 
@@ -838,9 +838,9 @@ def tf_resource_deps():
 
 def tf_portable_deps_no_runtime():
     return [
-        "@eigen_archive//:eigen3",
+        "//third_party/eigen3",
         "@double_conversion//:double-conversion",
-        "@nsync//:nsync_cpp",
+        "//third_party/nsync:nsync_cpp",
         "@com_googlesource_code_re2//:re2",
         "@farmhash_archive//:farmhash",
     ]

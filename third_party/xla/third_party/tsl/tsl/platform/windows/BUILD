@@ -45,6 +45,7 @@ cc_library(
     deps = [
         ":error_windows",
         ":wide_char",
+        "//third_party/eigen3",
         "//tsl/platform",
         "//tsl/platform:blocking_counter",
         "//tsl/platform:context",
@@ -75,7 +76,6 @@ cc_library(
         "@com_google_absl//absl/functional:any_invocable",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:optional",
-        "@eigen_archive//:eigen3",
     ],
 )
 

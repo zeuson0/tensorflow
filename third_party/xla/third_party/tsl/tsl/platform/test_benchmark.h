@@ -17,7 +17,7 @@ limitations under the License.
 #ifndef TENSORFLOW_TSL_PLATFORM_TEST_BENCHMARK_H_
 #define TENSORFLOW_TSL_PLATFORM_TEST_BENCHMARK_H_
 
-#include "benchmark/benchmark.h"  // from @com_google_benchmark  // IWYU pragma: export
+#include "third_party/benchmark/include/benchmark/benchmark.h"  // IWYU pragma: export
 #include "tsl/platform/platform.h"
 
 // FIXME(vyng): Remove this.

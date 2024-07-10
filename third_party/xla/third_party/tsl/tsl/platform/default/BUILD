@@ -125,6 +125,7 @@ cc_library(
         "nobuilder",
     ],
     deps = [
+        "//third_party/eigen3",
         "//tsl/platform",
         "//tsl/platform:blocking_counter",
         "//tsl/platform:context",
@@ -157,7 +158,6 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:optional",
-        "@eigen_archive//:eigen3",
     ],
 )
 
@@ -300,11 +300,11 @@ cc_library(
     ],
     textual_hdrs = ["mutex.h"],
     deps = [
+        "//third_party/nsync:nsync_cpp",
         "//tsl/platform",
         "//tsl/platform:macros",
         "//tsl/platform:thread_annotations",
         "//tsl/platform:types",
-        "@nsync//:nsync_cpp",
     ],
 )
 
@@ -367,7 +367,7 @@ cc_library(
         # TF Additional NUMA dependencies
         "@local_xla//xla/tsl:with_numa_support": [
             # Don't merge in a single line
-            "@hwloc",
+            "//third_party/hwloc",
         ],
         "//conditions:default": [],
     }),

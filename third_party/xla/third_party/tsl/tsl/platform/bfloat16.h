@@ -17,7 +17,7 @@ limitations under the License.
 #define TENSORFLOW_TSL_PLATFORM_BFLOAT16_H_
 
 // clang-format off
-#include "Eigen/Core"  // from @eigen_archive
+#include "third_party/eigen3/Eigen/Core"
 // clang-format on
 
 namespace tsl {
