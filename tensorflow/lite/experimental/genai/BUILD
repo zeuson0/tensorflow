@@ -8,6 +8,7 @@ load("//tensorflow/lite:special_rules.bzl", "tflite_portable_test_suite")
 cc_library(
     name = "genai_ops",
     srcs = [
+        "external_kvcache.cc",
         "genai_ops.cc",
         "kvcache.cc",
         "sdpa.cc",
@@ -44,6 +45,24 @@ cc_test(
         ":genai_ops",
         "//tensorflow/lite/c:c_api_types",
         "//tensorflow/lite/kernels:test_util",
+        "//tensorflow/lite/schema:schema_fbs",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "external_kvcache_test",
+    srcs = ["external_kvcache_test.cc"],
+    copts = tflite_copts(),
+    deps = [
+        ":genai_ops",
+        "//tensorflow/lite:framework",
+        "//tensorflow/lite:util",
+        "//tensorflow/lite/c:c_api_types",
+        "//tensorflow/lite/c:common",
+        "//tensorflow/lite/kernels:test_util",
+        "//tensorflow/lite/kernels/internal:tensor",
+        "//tensorflow/lite/kernels/internal:types",
         "//tensorflow/lite/schema:schema_fbs",
         "@com_google_googletest//:gtest_main",
     ],
