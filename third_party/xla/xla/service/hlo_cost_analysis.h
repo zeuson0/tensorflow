@@ -665,7 +665,8 @@ class HloCostAnalysis : public ConstDfsHloVisitor {
       HloComputation* computation);
 
   // Utility function to handle all element-wise operations.
-  absl::Status HandleElementwiseOp(const HloInstruction* hlo_instruction);
+  virtual absl::Status HandleElementwiseOp(
+      const HloInstruction* hlo_instruction);
 
   // Returns 0.0f if the hlo is not present in hlo_to_properties or if the key
   // is not present in hlo_to_properties[hlo]. Otherwise, returns the value that
