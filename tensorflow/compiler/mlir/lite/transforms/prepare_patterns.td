@@ -197,9 +197,9 @@ def ConvertMatrixSetDiagV3ToMatrixSetDiag :
 //===----------------------------------------------------------------------===//
 
 def LowerTensorScatterAdd: Pat<
-  (TF_TensorScatterAddOp $input, $indices, $updates),
+  (TF_TensorScatterAddOp $input, $indices, $updates, $bad_indices_policy),
   (TF_TensorScatterUpdateOp $input, $indices,
-     (TF_AddOp $updates, (CreateGatherNdOp $updates, $input, $indices)))>;
+     (TF_AddOp $updates, (CreateGatherNdOp $updates, $input, $indices)), $bad_indices_policy)>;
 
 //===----------------------------------------------------------------------===//
 // AddV2 op patterns.
