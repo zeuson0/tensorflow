@@ -16,19 +16,21 @@ limitations under the License.
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
-#include <iostream>
+#include <limits>
 #include <memory>
-#include <string>
+#include <type_traits>
+#include <vector>
 
-#include "absl/memory/memory.h"
 #include "Eigen/Core"  // from @eigen_archive
+#include "tensorflow/compiler/mlir/tools/optimize/quantization_utils.h"
 #include "tensorflow/lite/core/api/error_reporter.h"
 #include "tensorflow/lite/core/c/common.h"
 #include "tensorflow/lite/kernels/internal/cppmath.h"
-#include "tensorflow/lite/kernels/internal/quantization_util.h"
-#include "tensorflow/lite/kernels/internal/tensor_utils.h"
-#include "tensorflow/lite/kernels/internal/types.h"
+#include "tensorflow/lite/kernels/internal/portable_tensor_utils.h"
+#include "tensorflow/lite/kernels/internal/runtime_shape.h"
+#include "tensorflow/lite/logger.h"
 #include "tensorflow/lite/minimal_logging.h"
 #include "tensorflow/lite/schema/schema_generated.h"
 #include "tensorflow/lite/tools/optimize/model_utils.h"
@@ -344,23 +346,6 @@ TfLiteStatus SymmetricPerChannelQuantization(TensorT* tensor,
   return kTfLiteOk;
 }
 
-std::vector<int16_t> SymmetricQuantizeFloatsToInt16(const float* data,
-                                                    uint64_t num_elements,
-                                                    float scaling_factor) {
-  // Compute the inverse of scale.
-  const float scaling_factor_inv =
-      (scaling_factor == 0) ? 0 : 1.0 / scaling_factor;
-  std::vector<int16_t> buffer(num_elements);
-  const int32_t kScale = std::numeric_limits<int16_t>::max();
-
-  for (size_t i = 0; i < num_elements; i++) {
-    const int32_t quantized_value =
-        static_cast<int32_t>(TfLiteRound(data[i] * scaling_factor_inv));
-    buffer[i] = std::min(kScale, std::max(-kScale, quantized_value));
-  }
-  return buffer;
-}
-
 TfLiteStatus SymmetricQuantizeFloatsToInt16(ModelT* model, TensorT* tensor,
                                             float scaling_factor,
                                             ErrorReporter* error_reporter) {
@@ -619,28 +604,6 @@ TfLiteStatus SymmetricQuantizeTensorPerChannel(ModelT* model, TensorT* tensor,
                                uint8_buffer, buffer_size, TensorType_INT8,
                                model, tensor, error_reporter);
 }
-
-template <class BiasType>
-std::vector<BiasType> SymmetricBiasQuantize(const float* data,
-                                            uint64_t num_elements,
-                                            const std::vector<float>& scales) {
-  std::vector<BiasType> buffer(num_elements);
-  const BiasType kScale = std::numeric_limits<BiasType>::max();
-  float scaling_factor_inv_per_layer = (scales[0] == 0) ? 0 : 1.0 / scales[0];
-
-  for (int32_t idx = 0; idx < num_elements; idx++) {
-    float scaling_factor_inv =
-        scales.size() == 1 ? scaling_factor_inv_per_layer
-                           : ((scales[idx] == 0) ? 0 : 1.0 / scales[idx]);
-    const BiasType quantized_value =
-        tflite::SafeCast<BiasType>(TfLiteRound(data[idx] * scaling_factor_inv));
-    buffer[idx] = std::min(kScale, std::max(-kScale, quantized_value));
-  }
-  return buffer;
-}
-
-template std::vector<std::int32_t> SymmetricBiasQuantize<std::int32_t>(
-    const float* data, uint64_t num_elements, const std::vector<float>& scales);
 
 template <class BiasType>
 TfLiteStatus SymmetricPerLayerBiasQuantize(ModelT* model, TensorT* tensor,

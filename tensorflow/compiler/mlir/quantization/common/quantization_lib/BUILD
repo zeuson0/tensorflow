@@ -32,6 +32,7 @@ cc_library(
         ":quantization_interfaces_inc_gen",
         "//tensorflow/compiler/mlir/lite/quantization/ir:QuantOps",
         "//tensorflow/compiler/mlir/quantization/common/ir:QuantOps",
+        "//tensorflow/compiler/mlir/tools/optimize:quantization_utils",
         "//tensorflow/core:lib_proto_parsing",
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/lite/kernels/internal:tensor_utils",
