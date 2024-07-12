@@ -809,7 +809,7 @@ message DebugOptions {
   // Use Shardonnay, a new partitioner, to replace the existing
   // ShardingPropagation and SpmdPartitioner. See go/xla-sdy-pipeline for
   // details.
-  bool xla_use_shardonnay = 302;
+  bool xla_use_shardy = 302;
 
   bool xla_gpu_shard_autotuning = 304;
 
