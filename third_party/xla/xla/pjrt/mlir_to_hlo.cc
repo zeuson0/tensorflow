@@ -29,6 +29,7 @@ limitations under the License.
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
 #include "mlir/Bytecode/BytecodeWriter.h"  // from @llvm-project
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"  // from @llvm-project
@@ -68,7 +69,8 @@ namespace xla {
 
 absl::Status MlirToXlaComputation(mlir::ModuleOp module,
                                   XlaComputation& xla_computation,
-                                  bool use_tuple_args, bool return_tuple) {
+                                  bool use_tuple_args, bool return_tuple,
+                                  bool use_shardy) {
   mlir::MLIRContext* context = module->getContext();
   mlir::BaseScopedDiagnosticHandler diagnostic_handler(context);
   {
@@ -93,10 +95,10 @@ absl::Status MlirToXlaComputation(mlir::ModuleOp module,
     }
   }
 
-  // TODO(b/345414638): Delete when we move Shardonnay as the first pass in the
+  // TODO(b/345414638): Delete when we move Shardy as the first pass in the
   // XLA pipeline.
-  if (use_tuple_args && GetDebugOptionsFromFlags().xla_use_shardonnay()) {
-    // Shardonnay can't handle tuple args when round-tripping. So delay using
+  if (use_tuple_args && use_shardy) {
+    // Shardy can't handle tuple args when round-tripping. So delay using
     // tuples until after Shardonnay is run.
     sdy::addFrontendAttribute(module, sdy::kUseTupleArgs,
                               mlir::StringAttr::get(context, "t"));
@@ -162,7 +164,7 @@ absl::Status ParseMlirModuleStringAndConvertToXlaComputation(
   TF_ASSIGN_OR_RETURN(mlir::OwningOpRef<mlir::ModuleOp> module,
                       xla::ParseMlirModuleString(mlir_module_str, context));
   return xla::MlirToXlaComputation(*module, xla_computation, use_tuple_args,
-                                   return_tuple);
+                                   return_tuple, /*use_shardy=*/false);
 }
 
 absl::StatusOr<std::string> SerializeUsingNativeBytecode(
