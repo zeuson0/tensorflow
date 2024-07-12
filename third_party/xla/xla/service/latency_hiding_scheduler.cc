@@ -1390,12 +1390,45 @@ bool DefaultSchedulerCore::AddOccupierToResource(
   return true;
 }
 
+bool DefaultSchedulerCore::DoesNodeReleaseSelectiveResource(
+    const HloGraphNode* node) const {
+  return absl::c_any_of(
+      node->GetResources(), [&](const ResourcePair& resource) {
+        return resource.second == ResourceUsageType::kResourceRelease &&
+               async_tracker_->GetResourceHazardType(resource.first) ==
+                   ResourceHazardType::kSelective;
+      });
+}
+
 absl::StatusOr<HloGraphNode::TimeCost> DefaultSchedulerCore::ScheduleNode(
     HloGraphNode* n, DefaultSchedulerCore::SchedulingState* sched_state) const {
   // Insert the node into the sequence and mark it as scheduled.
   sched_state->new_sequence_reversed.push_back(
       const_cast<HloInstruction*>(&n->GetInstr()));
   n->SetScheduled();
+
+  // Remove scheduled node from the list of selective resource releasers if it
+  // was there.
+  if (sched_state->config.enable_selective_resources &&
+      std::erase(sched_state->selective_resource_releasers, n) > 0) {
+    // Perform sanity check node actually releases a selective resource.
+    if (!DoesNodeReleaseSelectiveResource(n)) {
+      LOG(WARNING) << "Selective resource releasers list contains node that "
+                      "does not release a selective resource: "
+                   << n->ToString();
+    }
+  }
+
+  // If scheduled node cannot overlap with nodes that hold selective resources,
+  // we increment the ready time of all nodes that release a selective resource
+  // with the cost of the scheduled node.
+  if (sched_state->config.enable_selective_resources &&
+      !n->GetValuableForSelectiveOverlap()) {
+    for (HloGraphNode* node : sched_state->selective_resource_releasers) {
+      node->SetReadyTime(node->GetReadyTime() + n->GetCost());
+    }
+  }
+
   // If this node is an async start/done handle the increase/decrease the number
   // of outstanding async ops.
   for (auto& resource : n->GetResources()) {
@@ -1533,6 +1566,13 @@ absl::StatusOr<HloGraphNode::TimeCost> DefaultSchedulerCore::ScheduleNode(
       sched_state->next_ready_stack.push_back(&edge.Target());
       std::push_heap(sched_state->next_ready_stack.begin(),
                      sched_state->next_ready_stack.end(), ready_time_cmp);
+    }
+
+    // If the node we added to ready set releases a selective resource, add
+    // it to the selective resource releasers list.
+    if (sched_state->config.enable_selective_resources &&
+        DoesNodeReleaseSelectiveResource(&edge.Target())) {
+      sched_state->selective_resource_releasers.push_back(&edge.Target());
     }
   }
   ++sched_state->scheduled_count;

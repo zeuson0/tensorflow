@@ -83,6 +83,9 @@ enum class ResourceHazardType {
   // more than necessary.
   kNonextendable = 2,
   kUnshareable = 3,
+  // Ops holding this resource can only have their latency/cost covered by
+  // ops that are valuable for selective overlap.
+  kSelective = 4,
 };
 
 constexpr int64_t ResourceTypeToIndex(ResourceType resource_type) {
@@ -121,6 +124,7 @@ struct SchedulerConfig {
   bool resource_sharing = false;
   bool resource_serializing = false;
   bool depth_based_memory_pressure_reduction = false;
+  bool enable_selective_resources = false;
   int64_t rerun = 0;
 };
 
@@ -358,6 +362,12 @@ class HloGraphNode {
   void SetForceDelay(bool force_delay) { force_delay_ = force_delay; }
   bool GetForceEarly() const { return force_early_; }
   void SetForceEarly(bool force_early) { force_early_ = force_early; }
+  bool GetValuableForSelectiveOverlap() const {
+    return valuable_for_selective_overlap_;
+  }
+  void SetValuableForSelectiveOverlap(bool valuable_for_selective_overlap) {
+    valuable_for_selective_overlap_ = valuable_for_selective_overlap;
+  }
   ResourcesVector GetResources() const { return resources_; }
   bool DoesOccupyAnyResource() const {
     return absl::c_any_of(resources_, [](const ResourcePair& resource) {
@@ -491,6 +501,9 @@ class HloGraphNode {
   absl::InlinedVector<int64_t, 1> released_shareable_resources_;
   // Shareable resources occupied by this node.
   absl::InlinedVector<int64_t, 1> occupied_shareable_resources_;
+  // Whether this node can be overlapped with (can cover the latency/cost of)
+  // nodes holding selective resources.
+  bool valuable_for_selective_overlap_ = true;
 };
 
 // Schedule graph that can be used to drive scheduling
@@ -821,6 +834,9 @@ class DefaultSchedulerCore : public SchedulerCore {
     absl::flat_hash_map<
         int64_t, std::vector<std::pair<HloEdge*, HloGraphNode::TimeCost>>>
         shareable_resource_occupiers;
+    // List of the graph nodes that release selective resources.
+    std::vector<HloGraphNode*> selective_resource_releasers;
+
     // Reference to this scheduler run configuration.
     const SchedulerConfig& config;
     SchedulingState(const HloInstructionSequence* instr_sequence,
@@ -883,6 +899,7 @@ class DefaultSchedulerCore : public SchedulerCore {
   virtual absl::StatusOr<HloGraphNode*> FindAndExtractBestNodeAvailable(
       SchedulingState& sched_state,
       DefaultSchedulerCore::ShouldSkipNodeFunction should_skip_node);
+  bool DoesNodeReleaseSelectiveResource(const HloGraphNode* node) const;
   void DumpLatencyHidingSchedule(
       const HloComputation* computation, const HloScheduleGraph& schedule_graph,
       const std::vector<HloInstruction*>& instructions,
