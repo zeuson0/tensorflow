@@ -41,6 +41,7 @@ cc_library(
     name = "conv_map_wrapper",
     srcs = ["conv_map_wrapper.cc"],
     hdrs = ["conv_map_wrapper.h"],
+    visibility = ["//visibility:public"],
     deps = [
         ":autotune_map_proto_cc",
         ":conv_parameters_proto_cc",
