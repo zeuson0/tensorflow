@@ -5201,11 +5201,13 @@ absl::Status AlgebraicSimplifierVisitor::HandleConvert(
   }
 
   // Try to replace convert(constant) with a constant of the right type to begin
-  // with. Disallow moving int4 since it is not supported for many ops
+  // with. Disallow moving sub-byte types since they may not be supported for
+  // some ops
   HloInstruction* constant;
   if (Match(convert, m::Convert(m::Constant(&constant))) &&
-      !primitive_util::IsSubByteNonPredType(src_type) &&
-      !primitive_util::IsSubByteNonPredType(dest_type)) {
+      (primitive_util::BitWidth(dest_type) <=
+       primitive_util::BitWidth(src_type)) &&
+      constant->user_count() == 1 && primitive_util::BitWidth(dest_type) >= 8) {
     TF_ASSIGN_OR_RETURN(Literal dest_literal,
                         constant->literal().Convert(dest_type));
     VLOG(10) << "Replacing convert(constant) with constant";

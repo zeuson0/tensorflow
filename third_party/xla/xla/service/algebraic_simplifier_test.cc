@@ -11706,8 +11706,8 @@ TEST_F(AlgebraicSimplifierTest, KeepInt4ConvertConstant) {
     HloModule module
 
     ENTRY test {
-        a = s4[] constant(0)
-        ROOT b = s8[] convert(a)
+        a = s8[] constant(0)
+        ROOT b = s4[] convert(a)
       }
     )";
   TF_ASSERT_OK_AND_ASSIGN(auto m, ParseAndReturnVerifiedModule(hlo_string));
