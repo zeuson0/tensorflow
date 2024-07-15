@@ -26,13 +26,11 @@ limitations under the License.
 
 #define __HIP_DISABLE_CPP_FUNCTIONS__
 
-#include "rocm/include/hip/hip_complex.h"
 #include "rocm/include/hip/hip_runtime.h"
 #include "rocm/include/hiprand/hiprand.h"
 
 #else  // CUDA
 
-#include "third_party/gpus/cuda/include/cuComplex.h"
 #include "third_party/gpus/cuda/include/cuda.h"
 
 #endif
@@ -46,7 +44,6 @@ struct UnsupportedGpuFeature {};
 
 #if TENSORFLOW_USE_SYCL
 
-using GpuContextHandle = ::sycl::context*;
 using GpuStreamHandle = ::sycl::queue*;
 using GpuEventHandle = ::sycl::event*;
 using GpuFunctionHandle = ::sycl::kernel*;
@@ -56,11 +53,8 @@ using GpuDevicePtr = void*;
 using GpuDeviceAttribute = UnsupportedGpuFeature;
 using GpuDeviceProperty = UnsupportedGpuFeature;
 using GpuModuleHandle = ze_module_handle_t;
-using GpuStatus = UnsupportedGpuFeature;
 using GpuFuncCachePreference = UnsupportedGpuFeature;
 using GpuSharedMemConfig = UnsupportedGpuFeature;
-using GpuComplexType = std::complex<float>;
-using GpuDoubleComplexType = std::complex<double>;
 using GpuRngHandle = UnsupportedGpuFeature;
 using GpuGraphHandle = UnsupportedGpuFeature;
 using GpuGraphExecHandle = UnsupportedGpuFeature;
@@ -80,8 +74,6 @@ using GpuDeviceProperty = hipDeviceProp_t;
 using GpuModuleHandle = hipModule_t;
 using GpuFuncCachePreference = hipFuncCache_t;
 using GpuSharedMemConfig = hipSharedMemConfig;
-using GpuComplexType = hipComplex;
-using GpuDoubleComplexType = hipDoubleComplex;
 using GpuRngHandle = hiprandGenerator_t;
 using GpuGraphHandle = hipGraph_t;
 using GpuGraphExecHandle = hipGraphExec_t;
@@ -100,8 +92,6 @@ using GpuDeviceProperty = CUdevprop;
 using GpuModuleHandle = CUmodule;
 using GpuFuncCachePreference = CUfunc_cache;
 using GpuSharedMemConfig = CUsharedconfig;
-using GpuComplexType = cuComplex;
-using GpuDoubleComplexType = cuDoubleComplex;
 using GpuGraphHandle = CUgraph;
 using GpuGraphExecHandle = CUgraphExec;
 using GpuGraphNodeHandle = CUgraphNode;
