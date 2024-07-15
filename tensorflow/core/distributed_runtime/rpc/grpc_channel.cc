@@ -101,8 +101,9 @@ Status NewHostPortGrpcChannel(const string& target,
   TF_RETURN_IF_ERROR(ValidateHostPortPair(target));
 
   ::grpc::ChannelArguments args = GetChannelArguments(rpc_options);
+  auto cred = GetChannelCredentials();
   *channel_pointer = ::grpc::CreateCustomChannel(
-      "dns:///" + target, ::grpc::InsecureChannelCredentials(), args);
+      "dns:///" + target, cred, args);
   return Status::OK();
 }
 

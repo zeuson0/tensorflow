@@ -423,7 +423,7 @@ const string GrpcServer::target() const {
 
 std::shared_ptr<::grpc::ServerCredentials> GrpcServer::GetServerCredentials(
     const ServerDef& server_def) const {
-  return ::grpc::InsecureServerCredentials();
+  return GetCredentials();
 }
 
 ChannelCreationFunction GrpcServer::GetChannelCreationFunction() const {

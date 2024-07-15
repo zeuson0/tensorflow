@@ -16,6 +16,7 @@ limitations under the License.
 #include "tensorflow/core/distributed_runtime/rpc/grpc_util.h"
 #include "tensorflow/core/distributed_runtime/tensor_coding.h"
 #include "tensorflow/core/lib/random/random.h"
+#include "tensorflow/core/distributed_runtime/rpc/grpc_sgx_ra_tls.h"
 
 namespace tensorflow {
 
@@ -114,4 +115,29 @@ bool GrpcMaybeParseProto(grpc::ByteBuffer* src, string* dst) {
   return true;
 }
 
+std::shared_ptr<::grpc::ServerCredentials> GetCredentials() {
+    const char* secure = std::getenv("TF_GRPC_SGX_RA_TLS_ENABLE");
+    LOG(INFO) << "GetCredentials";
+    if (secure && strcmp(secure, "on") == 0) {
+        LOG(INFO) << "Secure mode: " << string(secure);
+        return ::grpc::sgx::TlsServerCredentials();
+    }
+    return ::grpc::InsecureServerCredentials();
+
+}
+
+std::shared_ptr<::grpc::ChannelCredentials> GetChannelCredentials() {
+    const char* secure = std::getenv("TF_GRPC_SGX_RA_TLS_ENABLE");
+    LOG(INFO) << "GetCredentials";
+    if (secure && strcmp(secure, "on") == 0) {
+       LOG(INFO) << "Secure mode: " << string(secure);
+       const char* config_path = std::getenv("TF_GRPC_SGX_RA_TLS_CONFIG");
+       if (!config_path){
+          config_path = "dynamic_config.json";
+       }
+       LOG(INFO) << "Config path: " << string(config_path);
+       return ::grpc::sgx::TlsCredentials(config_path);
+    }
+    return ::grpc::InsecureChannelCredentials();
+}
 }  // namespace tensorflow
