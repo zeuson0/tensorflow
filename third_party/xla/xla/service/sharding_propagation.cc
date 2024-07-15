@@ -1557,10 +1557,25 @@ absl::StatusOr<bool> ProcessShardingInstruction(
     for (auto it = instructions.rbegin(); it != instructions.rend(); ++it) {
       HloInstruction* instruction = *it;
       if (instruction->IsCustomCall("Sharding")) {
-        HloSharding original_sharding = instruction->sharding();
         TF_RET_CHECK(instruction->has_sharding())
             << "Sharding instruction must have a sharding attribute";
+        HloSharding original_sharding = instruction->sharding();
         VLOG(3) << "ProcessShardingInstruction: " << instruction->ToString();
+
+        // Simplify the chain of Sharding custom-call instructions.
+        HloInstruction* operand = instruction->mutable_operand(0);
+        if (!original_sharding.IsUnknown() &&
+            operand->IsCustomCall("Sharding") && operand->user_count() == 1) {
+          operand->set_sharding(original_sharding);
+          TF_ASSIGN_OR_RETURN(
+              std::ignore,
+              computation->ReplaceInstruction(
+                  instruction, operand, /*preserve_sharding=*/false,
+                  /*relay_control_dependency=*/false,
+                  /*remove_unused_operands=*/false));
+          changed = true;
+          continue;
+        }
 
         std::vector<int64_t> unspec_dims;
         TF_RETURN_IF_ERROR(sharding_op_util::ParseAttributes(
