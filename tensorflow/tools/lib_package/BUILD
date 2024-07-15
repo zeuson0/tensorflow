@@ -162,7 +162,7 @@ genrule(
         "@png_archive//:LICENSE",
         "@com_google_protobuf//:LICENSE",
         "@snappy//:COPYING",
-        "@zlib_archive//:zlib.h",
+        "@zlib//:zlib.h",
     ] + select({
         "//tensorflow:android": [],
         "//tensorflow:ios": [],
@@ -195,8 +195,8 @@ genrule(
     ]) + if_not_system_lib(
         "grpc",
         [
-            "@grpc//:LICENSE",
-            "@grpc//third_party/address_sorting:LICENSE",
+            "@com_github_grpc_grpc//:LICENSE",
+            "@com_github_grpc_grpc//third_party/address_sorting:LICENSE",
         ],
     ) + if_rocm([
         "@rocprim_archive//:LICENSE.txt",
@@ -234,9 +234,9 @@ genrule(
         "@png_archive//:LICENSE",
         "@com_google_protobuf//:LICENSE",
         "@snappy//:COPYING",
-        "@zlib_archive//:zlib.h",
-        "@grpc//:LICENSE",
-        "@grpc//third_party/address_sorting:LICENSE",
+        "@zlib//:zlib.h",
+        "@com_github_grpc_grpc//:LICENSE",
+        "@com_github_grpc_grpc//third_party/address_sorting:LICENSE",
     ] + select({
         "//tensorflow:android": [],
         "//tensorflow:ios": [],

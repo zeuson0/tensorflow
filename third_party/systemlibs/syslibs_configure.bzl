@@ -43,7 +43,7 @@ VALID_LIBS = [
     "swig",
     "termcolor_archive",
     "wrapt",
-    "zlib_archive",
+    "zlib",
 ]
 
 def auto_configure_fail(msg):
